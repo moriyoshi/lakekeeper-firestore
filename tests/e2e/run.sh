@@ -9,7 +9,7 @@
 # through the task management API, create, replace, rename and drop a view, move a table
 # into another namespace, evolve a table and check what `lakekeeper-firestore search` finds, and
 # replay a request by its idempotency key, move a namespace, create, list and drop a generic table,
-# search tabulars, and read endpoint statistics.
+# search tabulars, read endpoint statistics, and tag a namespace, a table and a column.
 # Needs docker, curl and uv.
 #
 # The server needs the GCS emulator support of the patched Lakekeeper (see [patch] in

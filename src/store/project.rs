@@ -102,6 +102,9 @@ pub(super) async fn delete_project(project_id: &ProjectId, txn: &mut Txn) -> Res
     super::tasks::delete_project_tasks(txn, project_id)
         .await
         .map_err(ErrorModel::from)?;
+    super::tag::delete_project_definitions(txn, project_id)
+        .await
+        .map_err(ErrorModel::from)?;
     txn.delete(name(txn, project_id));
     // No role assignments are stored yet, so no user is affected.
     Ok(Vec::new())

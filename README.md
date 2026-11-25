@@ -5,8 +5,9 @@ catalog store. It is built as an independent crate on top of Lakekeeper's generi
 Lakekeeper only for testing on emulators (see `[patch]` in `Cargo.toml`).
 
 Status: early, tested on the emulators only. Projects, warehouses, namespaces (including moves),
-tables, views, generic tables, tasks, users, idempotency keys and the cache change log (for several
-instances) work. Roles, grants, tags and a real secret store are not done yet. See
+tables, views, generic tables, tags, tasks, users, idempotency keys and the cache change log (for
+several instances) work. A real secret store is not done yet; roles and grants are out of scope,
+as this is meant for a small, self-contained installation behind the allow-all authorizer. See
 [DESIGN.md](./DESIGN.md) for the approach, the plan and the known gaps.
 
 ```sh

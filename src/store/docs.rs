@@ -18,6 +18,9 @@
 //! | `task_configs` | [`task_config_id`] | [`TaskConfigDoc`] |
 //! | `task_schedules` | schedule ID ([`task_schedule_id`]) | [`TaskScheduleDoc`] |
 //! | `users` | user ID | [`UserDoc`] |
+//! | `tag_definitions` | tag definition ID | [`TagDefinitionDoc`] |
+//! | `tag_definition_names` | `{project}:{folded name}` | [`NameMarker`] |
+//! | `tags` | `{target}:{definition}:{source}` | [`TagDoc`]: a definition attached to a target |
 //! | `cache_changes` | random (`UUIDv7`) | [`CacheChangeDoc`]: changed cache keys of one write |
 //! | `idempotency_records` | `{warehouse}:{key}` | [`IdempotencyDoc`] |
 //! | `idx_tables` | table ID | [`IdxTable`](super::projection::IdxTable) |
@@ -61,6 +64,9 @@ pub(crate) const TASK_CONFIGS: &str = "task_configs";
 pub(crate) const TASK_SCHEDULES: &str = "task_schedules";
 pub(crate) const USERS: &str = "users";
 pub(crate) const CACHE_CHANGES: &str = "cache_changes";
+pub(crate) const TAG_DEFINITIONS: &str = "tag_definitions";
+pub(crate) const TAG_DEFINITION_NAMES: &str = "tag_definition_names";
+pub(crate) const TAGS: &str = "tags";
 pub(crate) const IDEMPOTENCY_RECORDS: &str = "idempotency_records";
 pub(crate) const IDX_TABLES: &str = "idx_tables";
 pub(crate) const IDX_VIEWS: &str = "idx_views";
@@ -173,6 +179,42 @@ pub(crate) struct GenericTableDoc {
     pub(crate) schema: Option<String>,
     /// JSON.
     pub(crate) statistics: Option<String>,
+}
+
+/// A tag definition, with the allowed values of an enumerated one, sorted.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct TagDefinitionDoc {
+    pub(crate) tag_definition_id: uuid::Uuid,
+    pub(crate) project_id: ProjectId,
+    pub(crate) name: String,
+    pub(crate) description: Option<String>,
+    pub(crate) scope: Vec<lakekeeper::service::TagScope>,
+    pub(crate) value_kind: lakekeeper::service::TagValueKind,
+    pub(crate) allowed_values: Vec<String>,
+    pub(crate) created_at: i64,
+    pub(crate) updated_at: Option<i64>,
+}
+
+/// A tag definition attached to a warehouse, namespace, tabular or column: at most one of
+/// `namespace_id` and `tabular_id` is set, and `field_id` only with `tabular_id`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct TagDoc {
+    pub(crate) tag_id: uuid::Uuid,
+    pub(crate) tag_definition_id: uuid::Uuid,
+    pub(crate) warehouse_id: WarehouseId,
+    pub(crate) namespace_id: Option<NamespaceId>,
+    pub(crate) tabular_id: Option<uuid::Uuid>,
+    /// The tabular's type (`table`, `view` or `generic-table`), to rebuild the target.
+    pub(crate) tabular_typ: Option<String>,
+    pub(crate) field_id: Option<i32>,
+    /// The target's scope; a query field.
+    pub(crate) kind: lakekeeper::service::TagScope,
+    /// The target's key; a query field.
+    pub(crate) target: String,
+    pub(crate) value: Option<String>,
+    pub(crate) source: lakekeeper::service::TagSource,
+    pub(crate) created_at: i64,
+    pub(crate) updated_at: Option<i64>,
 }
 
 /// Keys of one cache domain that a committed write changed; no keys for the whole domain.

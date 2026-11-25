@@ -870,7 +870,7 @@ impl CatalogStore for FirestoreBackend {
         request: CatalogCreateTagDefinitionRequest<'_>,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> Result<TagDefinition, CreateTagDefinitionError> {
-        Err(unsupported("create_tag_definition_impl").into())
+        super::tag::create_definition(project_id, request, &mut transaction.txn).await
     }
 
     async fn get_tag_definition_impl(
@@ -878,7 +878,7 @@ impl CatalogStore for FirestoreBackend {
         tag_definition_id: TagDefinitionId,
         catalog_state: Self::State,
     ) -> Result<Option<TagDefinition>, CatalogBackendError> {
-        Err(unsupported("get_tag_definition_impl"))
+        super::tag::get_definition(project_id, tag_definition_id, &mut catalog_state.latest()).await
     }
 
     async fn get_tag_definition_by_name_impl(
@@ -886,7 +886,7 @@ impl CatalogStore for FirestoreBackend {
         name: &str,
         catalog_state: Self::State,
     ) -> Result<Option<TagDefinition>, CatalogBackendError> {
-        Err(unsupported("get_tag_definition_by_name_impl"))
+        super::tag::get_definition_by_name(project_id, name, &mut catalog_state.latest()).await
     }
 
     async fn list_tag_definitions_impl(
@@ -894,14 +894,14 @@ impl CatalogStore for FirestoreBackend {
         pagination: PaginationQuery,
         catalog_state: Self::State,
     ) -> Result<ListTagDefinitionsResponse, ListTagDefinitionsError> {
-        Err(unsupported("list_tag_definitions_impl").into())
+        super::tag::list_definitions(project_id, pagination, &mut catalog_state.latest()).await
     }
 
     async fn get_tag_allowed_values_impl(
         tag_definition_id: TagDefinitionId,
         catalog_state: Self::State,
     ) -> Result<Vec<String>, CatalogBackendError> {
-        Err(unsupported("get_tag_allowed_values_impl"))
+        super::tag::allowed_values(tag_definition_id, &mut catalog_state.latest()).await
     }
 
     async fn update_tag_definition_impl<'a>(
@@ -910,7 +910,8 @@ impl CatalogStore for FirestoreBackend {
         request: UpdateTagDefinitionRequest<'_>,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> Result<(TagDefinition, Vec<String>), UpdateTagDefinitionError> {
-        Err(unsupported("update_tag_definition_impl").into())
+        super::tag::update_definition(project_id, tag_definition_id, request, &mut transaction.txn)
+            .await
     }
 
     async fn delete_tag_definition_impl<'a>(
@@ -918,7 +919,7 @@ impl CatalogStore for FirestoreBackend {
         tag_definition_id: TagDefinitionId,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> Result<(), DeleteTagDefinitionError> {
-        Err(unsupported("delete_tag_definition_impl").into())
+        super::tag::delete_definition(project_id, tag_definition_id, &mut transaction.txn).await
     }
 
     async fn apply_tag_impl<'a>(
@@ -929,14 +930,22 @@ impl CatalogStore for FirestoreBackend {
         source: TagSource,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> Result<(Tag, bool), ApplyTagError> {
-        Err(unsupported("apply_tag_impl").into())
+        super::tag::apply(
+            tag_id,
+            tag_definition_id,
+            target,
+            value,
+            source,
+            &mut transaction.txn,
+        )
+        .await
     }
 
     async fn remove_tag_impl<'a>(
         tag_id: TagId,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> Result<(), RemoveTagError> {
-        Err(unsupported("remove_tag_impl").into())
+        super::tag::remove(tag_id, &mut transaction.txn).await
     }
 
     async fn remove_tag_for_target_impl<'a>(
@@ -945,21 +954,21 @@ impl CatalogStore for FirestoreBackend {
         source: TagSource,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> Result<Option<Tag>, RemoveTagError> {
-        Err(unsupported("remove_tag_for_target_impl").into())
+        super::tag::remove_for_target(target, tag_definition_id, source, &mut transaction.txn).await
     }
 
     async fn list_tags_for_target_impl(
         target: TagTarget,
         catalog_state: Self::State,
     ) -> Result<Vec<TagWithName>, CatalogBackendError> {
-        Err(unsupported("list_tags_for_target_impl"))
+        super::tag::list_for_target(target, &mut catalog_state.latest()).await
     }
 
     async fn list_tags_on_targets_impl(
         targets: &[TagTarget],
         catalog_state: Self::State,
     ) -> Result<Vec<TagWithName>, CatalogBackendError> {
-        Err(unsupported("list_tags_on_targets_impl"))
+        super::tag::list_on_targets(targets, &mut catalog_state.latest()).await
     }
 
     async fn list_column_tags_for_tabular_impl(
@@ -967,7 +976,7 @@ impl CatalogStore for FirestoreBackend {
         tabular_id: TabularId,
         catalog_state: Self::State,
     ) -> Result<Vec<TagWithName>, CatalogBackendError> {
-        Err(unsupported("list_column_tags_for_tabular_impl"))
+        super::tag::list_column_tags(warehouse_id, tabular_id, &mut catalog_state.latest()).await
     }
 
     async fn list_tag_attachments_impl(
@@ -976,14 +985,20 @@ impl CatalogStore for FirestoreBackend {
         pagination: PaginationQuery,
         catalog_state: Self::State,
     ) -> Result<ListTagAttachmentsResponse, ListTagAttachmentsError> {
-        Err(unsupported("list_tag_attachments_impl").into())
+        super::tag::list_attachments(
+            tag_definition_id,
+            filter,
+            pagination,
+            &mut catalog_state.latest(),
+        )
+        .await
     }
 
     async fn list_effective_tag_candidates_impl(
         target: TagTarget,
         catalog_state: Self::State,
     ) -> Result<Vec<EffectiveTagCandidate>, CatalogBackendError> {
-        Err(unsupported("list_effective_tag_candidates_impl"))
+        super::tag::effective_candidates(target, &mut catalog_state.latest()).await
     }
 
     async fn sync_role_members_by_ident_impl<'a>(

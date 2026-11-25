@@ -460,6 +460,13 @@ pub(super) async fn drop(
         txn.delete(marker_name(txn, warehouse_id, &ns.name));
         txn.delete(doc_name(txn, ns.namespace_id));
     }
+    super::tag::delete_for_namespaces(
+        txn,
+        warehouse_id,
+        &namespaces.iter().map(|n| n.namespace_id).collect(),
+        &tabulars.iter().map(|t| t.tabular_id).collect(),
+    )
+    .await?;
     Ok(NamespaceDropInfo {
         child_namespaces: children.iter().map(|c| c.namespace_id).collect(),
         child_tables,

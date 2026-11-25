@@ -29,6 +29,7 @@ pub(crate) mod search;
 mod server;
 mod table;
 mod tabular;
+mod tag;
 mod task_admin;
 mod tasks;
 #[cfg(test)]

@@ -102,8 +102,8 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
    - **REST `DELETE` of a table returned 503** until the task queue existed (2026-11-24, see
      "Task queue" below). The e2e test now purges a table and waits for the purge worker to
      delete its files.
-   - **Not done yet:** roles, grants, tags, and the snapshot filter of `loadTable` (every
-     snapshot is returned). The rest of this list was done in step 5.
+   - **Not done yet:** the snapshot filter of `loadTable` (every snapshot is returned).
+     Roles and grants are out of scope; the rest of this list was done in step 5.
    - **Secrets.** Warehouse credentials need a secret store. For testing only,
      `LAKEKEEPER__DEBUG__IN_MEMORY_SECRETS=true` keeps them in process memory, where a restart
      loses them.
@@ -180,14 +180,29 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
    - **Endpoint statistics**: always empty, because no statistics sink is configured; the
      page tokens step through windows as upstream's do.
    - **The cache change log** (see "Cache change log").
+   - **Tags** (`src/store/tag.rs`): definitions in `tag_definitions` (allowed values inside,
+     sorted) with a case-insensitive name marker per project, and attachments in `tags`,
+     keyed by target, definition and source, so applying a tag again finds it and the same
+     value changes nothing. Attachments go with their warehouse, namespace or tabular, as
+     upstream's cascading foreign keys make them go; a soft-deleted tabular keeps them but
+     leaves the reverse lookup. Inherited tags walk the namespace path and the warehouse,
+     with upstream's distances. The reverse lookup reads a definition's attachments a page
+     at a time and filters in memory. Upstream also refuses a column tag for a field the
+     table never had, and deletes column tags once the field leaves the table's last schema;
+     this store does neither, since the core resolves the column in the current schema
+     first and nothing removes old schemas yet.
 
    The e2e test replays a namespace create by its idempotency key, moves a namespace,
-   creates, loads, lists, searches and drops a generic table, and reads endpoint
-   statistics, over REST.
+   creates, loads, lists, searches and drops a generic table, reads endpoint statistics,
+   and tags a namespace, a table and a column (checking inheritance and the reverse
+   lookup), over REST.
 
-   Still missing: roles, grants and tags. With the allow-all authorizer nothing on the
-   catalog paths reaches them (it declares no bootstrap grants), only their own
-   management endpoints, which answer with an error naming the method.
+   Out of scope (decided 2026-11-25): roles and grants, with the role assignments and
+   role-provider syncs that go with them. This catalog is meant for a small, self-contained
+   installation behind the allow-all authorizer, with access to the server controlled
+   outside it (Cloud Run IAM). Nothing on the catalog paths reaches them under allow-all
+   (it declares no bootstrap grants), only their own management endpoints, which answer
+   with an error naming the method.
 6. **Deployment.** Container image for Cloud Run, Firestore indexes, and IAM.
 
 ## Plan: normalized table metadata (drafted 2026-11-24)

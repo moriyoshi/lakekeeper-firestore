@@ -515,6 +515,7 @@ mod search;
 mod search_tabular;
 mod soft_delete;
 mod table;
+mod tag;
 mod task_admin;
 mod tasks;
 mod user;

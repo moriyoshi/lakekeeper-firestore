@@ -199,6 +199,7 @@ pub(super) async fn delete_warehouse(
     if !namespaces.is_empty() {
         return Err(WarehouseNotEmpty::new().into());
     }
+    super::tag::delete_for_warehouse(txn, warehouse_id).await?;
     txn.delete(marker_name(txn, &doc.project_id, &doc.name));
     txn.delete(doc_name(txn, warehouse_id));
     Ok(DeletedWarehouse {

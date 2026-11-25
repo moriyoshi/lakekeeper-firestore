@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 use crate::store::docs::{
     CACHE_CHANGES, IDEMPOTENCY_RECORDS, IDX_FIELDS, IDX_PARTITION_SPECS, IDX_SNAPSHOTS, IDX_TABLES,
-    IDX_VIEWS, NAMESPACES, TABULARS, TASK_SCHEDULES, TASKS, USERS,
+    IDX_VIEWS, NAMESPACES, TABULARS, TAG_DEFINITIONS, TAGS, TASK_SCHEDULES, TASKS, USERS,
 };
 
 #[derive(Debug, Clone)]
@@ -66,6 +66,9 @@ fn indexes() -> Vec<(&'static str, Vec<F>)> {
                 Asc("created_at"),
             ],
         ),
+        // Tag definitions of a project, and the attachments of a definition.
+        (TAG_DEFINITIONS, vec![Asc("project_id"), Asc("created_at")]),
+        (TAGS, vec![Asc("tag_definition_id"), Asc("created_at")]),
         // User listing and search.
         (USERS, vec![Asc("active"), Asc("created_at")]),
         // Tabulars stored below a location.

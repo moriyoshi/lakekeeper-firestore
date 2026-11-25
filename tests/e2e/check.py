@@ -209,8 +209,8 @@ def tasks(url: str) -> None:
 
 
 def extras(url: str) -> None:
-    # Idempotency keys, namespace moves, generic tables, tabular search and endpoint
-    # statistics, over REST.
+    # Idempotency keys, namespace moves, generic tables, tabular search, endpoint
+    # statistics and tags, over REST.
     prefix = request(f"{url}/v1/config?warehouse=errtraq")["defaults"]["prefix"]
     namespaces = f"{url}/v1/{prefix}/namespaces"
     key = {"Idempotency-Key": "01938f4e-7c5a-7d3e-8a1b-2c3d4e5f6a7b"}
@@ -267,6 +267,47 @@ def extras(url: str) -> None:
 
     stats = request(f"{management}/endpoint-statistics", {"warehouse": {"type": "all"}})
     check("check_endpoint_statistics", stats["called-endpoints"], [])
+
+    # Tags: definitions, tags on a namespace, a table and a column, inheritance, and the
+    # reverse lookup.
+    owner = request(
+        f"{management}/tag-definition",
+        {
+            "name": "owner",
+            "scope": ["warehouse", "namespace", "table", "column"],
+            "value-kind": "free-text",
+        },
+    )
+    request(
+        f"{management}/tag-definition",
+        {"name": "pii", "scope": ["column"], "value-kind": "marker"},
+    )
+    names = [d["name"] for d in request(f"{management}/tag-definition")["tag-definitions"]]
+    check("check_tag_definitions_listed", sorted(names), ["owner", "pii"])
+    table_id = request(f"{namespaces}/events/tables/batches")["metadata"]["table-uuid"]
+    return_ids = request(f"{namespaces}?returnUuids=true")
+    events_id = return_ids["namespace-uuids"][return_ids["namespaces"].index(["events"])]
+    table_tags = f"{management}/warehouse/{wh}/table/{table_id}/tags"
+    request(f"{management}/warehouse/{wh}/namespace/{events_id}/tags/owner", {"value": "sales"}, "PUT")
+    request(f"{table_tags}/owner", {"value": "alice"}, "PUT")
+    request(f"{management}/warehouse/{wh}/table/{table_id}/column/id/tags/pii", {}, "PUT")
+
+    def effective_owner() -> list:
+        tags = request(f"{table_tags}?effective=true")["tags"]
+        return [t["value"] for t in tags if t["name"] == "owner"]
+
+    check("check_table_tag", [t["value"] for t in request(table_tags)["tags"]], ["alice"])
+    check("check_effective_tag", effective_owner(), ["alice"])
+    columns = request(f"{management}/warehouse/{wh}/table/{table_id}/column-tags")["columns"]
+    check(
+        "check_column_tags",
+        [(c["field-id"], [t["name"] for t in c["tags"]]) for c in columns],
+        [(1, ["pii"])],
+    )
+    attached = request(f"{management}/tag-definition/{owner['id']}/attachments")
+    check("check_tag_attachments", len(attached["attachments"]), 2)
+    request(f"{table_tags}/owner", method="DELETE")
+    check("check_inherited_tag", effective_owner(), ["sales"])
 
 
 def search_cli(*args: str) -> list[dict]:

@@ -761,6 +761,7 @@ pub(super) async fn drop(
     }
     delete_docs(txn, &t);
     projection_store::dropped(txn, &t).await?;
+    super::tag::delete_for_tabular(txn, warehouse_id, t.tabular_id).await?;
     Ok(Location::from_str(&t.location).map_err(InternalParseLocationError::from)?)
 }
 
