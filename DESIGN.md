@@ -231,8 +231,24 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
      `distroless/cc`, since the Azure SDK's `native-tls` links libssl dynamically; the
      console's build needs Node.js in the builder. The service runs with CPU always
      allocated and at least one instance, for the task queues and the change-log listener,
-     behind Cloud Run IAM with `LAKEKEEPER__BASE_URI` unset, so URLs follow the request
-     (and `gcloud run services proxy` works). Not verified yet; nothing is deployed.
+     behind Cloud Run IAM with `LAKEKEEPER__BASE_URI` unset, so URLs follow the request.
+   - **Checked on a sandbox (2026-11-25):** `deploy/terraform` holds the whole deployment,
+     Firestore indexes, exemptions and TTL policy included (from `firestore.indexes.json`,
+     replacing the Firebase CLI), and a build account for Cloud Build, as new projects no
+     longer give the default compute account the roles a build needs. Applied, checked and
+     destroyed: private access, bootstrap, a keyless GCS warehouse with STS-vended tokens,
+     pyiceberg writes and reads with an ID token, a background purge, the console, and clean
+     logs (DEPLOY.md, "Checked so far"). Findings:
+     - The build's memory, measured: about 3 GB for the console's `npm ci` (it builds
+       upstream's console-components from git, with `vite-plugin-dts`), and 2.7 GB for the
+       largest rustc. `CARGO_BUILD_JOBS` (default 2) and a 2 GB Node heap bound it; a 1.5 GB
+       heap is too small. On `E2_HIGHCPU_8` (8 GB), 4 jobs built in 19 minutes. A local
+       build on a VM with 3 GB free still ran out of memory at 2 jobs, in the main crate.
+     - The new project's Cloud Build quota refused `E2_HIGHCPU_32`.
+     - Terraform with a one-hour access token outlived it on the index builds; indexes left
+       building were imported afterwards.
+     - Not checked: `gcloud run services proxy` (it needs a CLI component), several
+       instances at once, and a keyed credential refused by the store on a real project.
 
 ## Plan: normalized table metadata (drafted 2026-11-24)
 

@@ -1,9 +1,9 @@
 # Deploying on Cloud Run
 
 A guide for one catalog in one Google Cloud project: a Firestore database, a GCS bucket for
-the warehouse, and a Cloud Run service running as its own service account. Nothing here has
-been run against a real project yet; the image is checked on the emulators only (see
-"Checked so far").
+the warehouse, and a Cloud Run service running as its own service account. Steps 1 to 5 are
+also a Terraform stack, `deploy/terraform` (see "With Terraform"), which was applied to a
+sandbox project, checked and destroyed on 2026-11-25 (see "Checked so far").
 
 The catalog has no access control of its own: it runs Lakekeeper's allow-all authorizer, so
 anyone who reaches the server administers every warehouse. Cloud Run IAM is the gate. Keep
@@ -100,7 +100,8 @@ gcloud builds submit --project $PROJECT --region $REGION \
   --config deploy/cloudbuild.yaml --substitutions _IMAGE=$IMAGE .
 ```
 
-`deploy/cloudbuild.yaml` builds on an `E2_HIGHCPU_32` machine with 16 parallel jobs. The build
+`deploy/cloudbuild.yaml` builds on an `E2_HIGHCPU_8` machine (8 GB) with 4 parallel jobs, in
+about 19 minutes; a new project may not be allowed larger machine types. The build
 needs memory for its largest rustc process (about 2.7 GB) and for the console's `npm ci`
 (about 3 GB, capped through `NODE_OPTIONS`), which overlaps the first crates. The `Dockerfile`
 defaults to 2 jobs, which keeps a local build near 4 GB; pass `--build-arg CARGO_BUILD_JOBS=N`
@@ -127,9 +128,9 @@ gcloud run services add-iam-policy-binding lakekeeper --project $PROJECT --regio
 - Several instances are safe: tasks are claimed in transactions, and each instance
   invalidates its caches from the change log that the others write.
 - Leave `LAKEKEEPER__BASE_URI` unset. The server then builds the URLs it hands to clients
-  from each request's `Host` and `X-Forwarded-Proto`. A fixed base URI would send clients
-  that come through `gcloud run services proxy` straight to the service, without the token
-  the proxy adds.
+  from each request: the service URL for direct clients, with `https` (Cloud Run's front end
+  sets `X-Forwarded-Proto`), and a forwarded host when one is sent. A fixed base URI would
+  send every client to that one address.
 - Other settings are upstream Lakekeeper's `LAKEKEEPER__*` variables and the ones in the
   README. Firestore has no schema migrations: a new image only needs `search indexes`
   re-run and deployed if the indexes changed.
@@ -186,10 +187,63 @@ gcloud run services proxy lakekeeper --project $PROJECT --region $REGION --port 
 # Catalog: http://localhost:8181/catalog   Console (ui builds): http://localhost:8181/ui
 ```
 
+The proxy needs the `cloud-run-proxy` component of the Google Cloud CLI, and is not checked
+yet: whether clients behind it are handed `localhost` URLs depends on the headers it forwards.
+
+## With Terraform
+
+`deploy/terraform` creates what steps 1 to 5 do, in one stack: the APIs, the Firestore
+database with the indexes, single-field exemptions and TTL policy of a `firestore.indexes.json`
+(no Firebase CLI needed), the bucket, the repository, the service's account and roles, a build
+account for Cloud Build (new projects no longer give the default compute account the roles a
+build needs), and the private service with its invokers. It applies in two phases, as the
+image is built in between:
+
+```sh
+cat > deploy/terraform/my.tfvars <<VARS
+project  = "$PROJECT"
+region   = "$REGION"
+bucket   = "$BUCKET"
+invokers = ["user:someone@example.com"]
+VARS
+terraform -chdir=deploy/terraform init
+terraform -chdir=deploy/terraform apply -var-file=my.tfvars   # everything but the service
+
+REPO=$(terraform -chdir=deploy/terraform output -raw image_repository)
+gcloud builds submit --project $PROJECT --region $REGION --config deploy/cloudbuild.yaml \
+  --service-account "$(terraform -chdir=deploy/terraform output -raw builder_service_account)" \
+  --substitutions _IMAGE=$REPO/lakekeeper-firestore:0.1.0 .
+
+terraform -chdir=deploy/terraform apply -var-file=my.tfvars \
+  -var image=$REPO/lakekeeper-firestore:0.1.0
+```
+
+Firestore builds each composite index for a few minutes, so the first apply takes about half
+an hour. `protect_data = false` lets `terraform destroy` delete the database and the bucket's
+objects too; by default they are kept. Destroying leaves the APIs enabled, and the
+`PROJECT_cloudbuild` bucket that `gcloud builds submit` creates for its uploads.
+
 ## Checked so far
 
-Nothing in this guide is verified yet. To check next: building the image from this
-`Dockerfile` and running it against the Firestore emulator (`/health`, bootstrap, and an
-ignored `Authorization` header). Then, on a real project: Cloud Build, the index deploy with
-the Firebase CLI, IAM, the Cloud Run flags, ID tokens through the catalog, and STS-vended GCS
-tokens.
+On a sandbox project (2026-11-25), with the Terraform stack, then destroyed:
+
+- The stack applied (68 resources, 34 composite indexes), and the image built on Cloud Build
+  with the console in 19 minutes on `E2_HIGHCPU_8`. `E2_HIGHCPU_32` was refused: the new
+  project's quota does not allow it.
+- Cloud Run refused requests without a token (403). With a user's ID token from
+  `gcloud auth print-identity-token`, `/health` reported Firestore and the secret store
+  healthy, bootstrap worked, and the console was served at `/ui`.
+- A GCS warehouse with `gcp-system-identity` and `"sts-enabled": true` was created: the
+  service account reached the bucket, and STS issued a downscoped token during validation.
+- pyiceberg 0.10 created a namespace and a table, appended, deleted a row, and a second client
+  read the rest back, with the ID token as `token` and the vended GCS token
+  (`gcs.oauth2.token`, with a refresh endpoint) for the data. Listings ran on the deployed
+  indexes.
+- A purge ran as a background task between requests and deleted the table's files within
+  10 seconds; the task reported `SUCCESS`.
+- The service logged no errors but those provoked on purpose, and no missing-index errors.
+
+Not checked: `gcloud run services proxy` (above); a key refused by the secret store, which
+storage validation reaches first with a made-up key; several instances at once; a service
+account's ID token (`--audiences`); and the Firebase CLI route of step 2, which the Terraform
+stack replaces.

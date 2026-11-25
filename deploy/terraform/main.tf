@@ -126,6 +126,32 @@ resource "google_storage_bucket_iam_member" "warehouse_objects" {
   member = local.service_account
 }
 
+# Cloud Build runs as its own account: new projects no longer give the default compute
+# account the roles a build needs. `gcloud builds submit --service-account` names it.
+resource "google_service_account" "builder" {
+  account_id   = var.builder_account_id
+  display_name = "Lakekeeper image builds"
+  depends_on   = [google_project_service.apis]
+}
+
+resource "google_project_iam_member" "builder" {
+  for_each = toset([
+    # The uploaded source, in the `PROJECT_cloudbuild` bucket.
+    "roles/storage.objectViewer",
+    "roles/logging.logWriter",
+  ])
+  project = var.project
+  role    = each.value
+  member  = "serviceAccount:${google_service_account.builder.email}"
+}
+
+resource "google_artifact_registry_repository_iam_member" "builder" {
+  repository = google_artifact_registry_repository.images.name
+  location   = var.region
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${google_service_account.builder.email}"
+}
+
 # --- The service ------------------------------------------------------------------------------
 
 resource "google_cloud_run_v2_service" "lakekeeper" {

@@ -72,7 +72,7 @@ def test_version():
 
 def test_health(url):
     with urllib.request.urlopen(f"{url}/health") as response:
-        assert json.load(response)["health"] == "healthy"
+        assert json.load(response)["health"] == "ok"
 
 
 def test_healthcheck_subcommand(url):

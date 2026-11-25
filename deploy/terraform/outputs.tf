@@ -12,3 +12,8 @@ output "service_account" {
   description = "The service's identity, to grant access to further buckets."
   value       = google_service_account.lakekeeper.email
 }
+
+output "builder_service_account" {
+  description = "For `gcloud builds submit --service-account`."
+  value       = google_service_account.builder.id
+}

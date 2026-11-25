@@ -49,6 +49,12 @@ variable "service_account_id" {
   default     = "lakekeeper"
 }
 
+variable "builder_account_id" {
+  description = "Account ID of the identity Cloud Build runs as."
+  type        = string
+  default     = "lakekeeper-builder"
+}
+
 variable "service_name" {
   description = "Cloud Run service."
   type        = string

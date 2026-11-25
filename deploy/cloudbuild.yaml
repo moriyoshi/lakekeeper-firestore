@@ -1,6 +1,7 @@
 # Builds the image on Cloud Build, with the console unless _FEATURES is empty:
 #
 #   gcloud builds submit --config deploy/cloudbuild.yaml \
+#     --service-account "$(terraform -chdir=deploy/terraform output -raw builder_service_account)" \
 #     --substitutions _IMAGE=REGION-docker.pkg.dev/PROJECT/lakekeeper/lakekeeper-firestore:TAG .
 #
 # A release build of Lakekeeper is large: the machine type and timeout below allow for it.
@@ -16,9 +17,13 @@ steps:
 images: ["${_IMAGE}"]
 substitutions:
   _FEATURES: ui
-  # E2_HIGHCPU_32 has 32 GB: at about 2.7 GB for the largest rustc, 16 jobs leave room.
-  _CARGO_BUILD_JOBS: "16"
+  # E2_HIGHCPU_8 has 8 GB: 4 jobs fit beside the largest rustc (about 2.7 GB). Measured:
+  # about 19 minutes with the console.
+  _CARGO_BUILD_JOBS: "4"
   _IMAGE: ""
 options:
-  machineType: E2_HIGHCPU_32
+  # New projects may not get larger machine types (a quota restriction).
+  machineType: E2_HIGHCPU_8
+  # Required with a user-specified service account; the logs stay readable in Cloud Logging.
+  logging: CLOUD_LOGGING_ONLY
 timeout: 3600s
