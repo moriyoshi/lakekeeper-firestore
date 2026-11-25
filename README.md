@@ -1,11 +1,13 @@
 # lakekeeper-firestore
 
 [Lakekeeper](https://github.com/lakekeeper/lakekeeper) (an Apache Iceberg REST catalog) with a Firestore
-catalog store. It is built as an independent crate on top of Lakekeeper's generic server, without a fork.
+catalog store. It is built as an independent crate on top of Lakekeeper's generic server. It patches
+Lakekeeper only for testing on emulators (see `[patch]` in `Cargo.toml`).
 
-Status: early. Server info, bootstrap, projects, warehouses, namespaces and tables (create, load
-and commit) work against the Firestore emulator. Views, roles, grants, tasks and a real secret store
-are not done yet. See [DESIGN.md](./DESIGN.md) for the approach, the plan and the known gaps.
+Status: early, tested on the emulators only. Projects, warehouses, namespaces (including moves),
+tables, views, generic tables, tasks, users, idempotency keys and the cache change log (for several
+instances) work. Roles, grants, tags and a real secret store are not done yet. See
+[DESIGN.md](./DESIGN.md) for the approach, the plan and the known gaps.
 
 ```sh
 cargo build

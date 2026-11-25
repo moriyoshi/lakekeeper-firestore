@@ -76,8 +76,9 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
    - `src/secrets.rs`: a secret store that fails every call.
    - `src/store/catalog.rs`: the `CatalogStore` impl. Its stubs were generated from the trait at
      v0.15.1, and each one returns a `CatalogBackendError` naming the method. Two exceptions:
-     `record_cache_changes_impl` succeeds and writes nothing, and `cache_change_log` never reports a
-     change. That is correct for a single instance only (see "Cache change log" below).
+     `record_cache_changes_impl` succeeded and wrote nothing, and `cache_change_log` never
+     reported a change, which was correct for a single instance only. Both are implemented
+     now (see "Cache change log" below).
 3. **Minimum for errtraq (working on the emulator, 2026-11-23).** These are implemented in
    `src/store/`:
    - **Server info and bootstrap.** The server document is created on first use.
@@ -101,9 +102,8 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
    - **REST `DELETE` of a table returned 503** until the task queue existed (2026-11-24, see
      "Task queue" below). The e2e test now purges a table and waits for the purge worker to
      delete its files.
-   - **Not done yet:** namespace move, generic tables, users, roles, grants, tags,
-     idempotency keys, endpoint statistics, and the snapshot filter of `loadTable` (every snapshot
-     is returned).
+   - **Not done yet:** roles, grants, tags, and the snapshot filter of `loadTable` (every
+     snapshot is returned). The rest of this list was done in step 5.
    - **Secrets.** Warehouse credentials need a secret store. For testing only,
      `LAKEKEEPER__DEBUG__IN_MEMORY_SECRETS=true` keeps them in process memory, where a restart
      loses them.
@@ -148,6 +148,46 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
 
    The e2e test creates, replaces, renames, lists and drops a view over REST, and pyiceberg
    moves a table into another namespace and reads it back.
+
+   Done (2026-11-25), each following upstream's Postgres store unless noted:
+   - **Idempotency keys** (`src/store/idempotency.rs`): one `idempotency_records` document
+     per committed success, `{warehouse}:{key}`, written in the mutation's transaction.
+     Records carry `expire_at` (a Firestore timestamp, lifetime plus grace period) for a TTL
+     policy, declared in `firestore.indexes.json`; TTL deletion can lag by a day, so an
+     expired record counts as absent. The check reads outside a transaction; Firestore reads
+     are strongly consistent, which is what upstream requires of it. Of two transactions
+     inserting the same key, one commits and the other fails with 409 where upstream's
+     replays; the client's retry then replays. Idempotency is on by default upstream, and
+     the server advertises it in `getConfig`, so a client sending the header got 503 before.
+   - **Namespace move** (`namespace::move_to`): only a namespace without children moves, as
+     upstream, so the move rewrites the namespace document and its name marker; tabulars
+     refer to it by ID. The ancestors keep their stored spelling, a retry is a no-op, and
+     the guards match upstream's (protection, children, into itself, destination taken).
+   - **Generic tables** (`src/store/generic_table.rs`): tabular documents of type
+     `generic-table` whose format, doc, schema and statistics sit in a `generic` field (the
+     JSON as strings, exempt from indexing). They share the name and location markers with
+     tables and views, so the shared code renames, protects, soft-deletes, lists and drops
+     them, and the projection skips them. Listing needs one more composite index.
+   - **Users** (`src/store/user.rs`): needed once authentication is on, because every
+     `getConfig` looks up the caller and registers a new one. Deletes are soft and scrub
+     the name and email. No role assignments are stored, so a delete affects no role. A
+     name filter and the user search read every active user and match substrings in
+     memory; upstream's search ranks by trigram similarity in an index, this one puts an
+     exact ID first and then users whose name or email contains the term.
+   - **Tabular search** (the management API's, used by the console): a UUID finds that
+     tabular and the tabulars of the namespace with that ID; other terms rank `ns.name` by
+     `pg_trgm`'s trigram distance, computed here over every active tabular of the warehouse.
+   - **Endpoint statistics**: always empty, because no statistics sink is configured; the
+     page tokens step through windows as upstream's do.
+   - **The cache change log** (see "Cache change log").
+
+   The e2e test replays a namespace create by its idempotency key, moves a namespace,
+   creates, loads, lists, searches and drops a generic table, and reads endpoint
+   statistics, over REST.
+
+   Still missing: roles, grants and tags. With the allow-all authorizer nothing on the
+   catalog paths reaches them (it declares no bootstrap grants), only their own
+   management endpoints, which answer with an error naming the method.
 6. **Deployment.** Container image for Cloud Run, Firestore indexes, and IAM.
 
 ## Plan: normalized table metadata (drafted 2026-11-24)
@@ -619,7 +659,7 @@ the console before the emulator was configured.
   about 1 MiB in total make the write fail. Postgres has no such limit.
 - **View default namespaces.** Upstream's Postgres store keeps each view version's default
   namespace as a namespace ID, so a renamed namespace is renamed in the view too. The metadata
-  file keeps the name it was committed with; this store has no namespace rename yet.
+  file keeps the name it was committed with, so a namespace move does not reach it.
 - **Dropped transactions** are rolled back in the background (`Drop for Txn`), so a failed
   request does not leave locks behind. The rollback needs a live runtime: a transaction
   dropped while the process shuts down (or at the end of a `#[tokio::test]`) keeps its locks
@@ -695,10 +735,40 @@ over REST.
 
 Every task method of the store is implemented.
 
-### Cache change log
+### Cache change log (`src/store/cache_change_log.rs`, 2026-11-25)
 
-Until change documents are written, the store suits only one instance. A Cloud Run service must
-run with `max-instances=1` and rely on cache TTLs, or disable Lakekeeper's caches.
+Lakekeeper caches warehouses, namespaces, secrets and more per instance, and evicts what
+other instances changed by reading a change log the writes record. With it, several
+instances can serve one catalog.
+
+- **Recording.** A write records its changed keys in `cache_changes` documents, in its own
+  transaction: one per domain and up to 1000 keys (none for a whole domain), with
+  `recorded_at` from this server's clock. `domain` and `keys` are exempt from indexing.
+- **Reading.** Postgres reads its log by transaction ID. Firestore has nothing like it: a
+  field written in a transaction does not hold the commit time (`REQUEST_TIME` is when the
+  commit request arrived, so a read between that and the commit would miss the document,
+  and a later query by time would skip it). Each instance therefore reads the log through
+  a Firestore listener, which delivers every committed document once, in consistent
+  snapshots. Changes wait in the listener until the poller takes them.
+- **Start and window.** The listener's query is "recorded after ten minutes before the
+  listener started". The first snapshot is the state the log starts at, so the window only
+  bounds that first read (and clock skew between instances must stay under it).
+- **Target resets.** The emulator answers every change with a target reset and resends the
+  whole result set; Firestore may reset a target too. The listener keeps the names of the
+  documents it has passed on, so only new documents count.
+- **Reconnects.** A stream that ends resumes from its last consistent snapshot. One that
+  cannot resume starts again, and the next poll returns a reset (`ServerChanged`), so the
+  instance treats every cached entry as stale.
+- **Pruning** deletes documents older than upstream's retention (twice the longest cache
+  TTL, at least two hours), up to 10 000 per run, in plain batch writes that another
+  pruner's deletes cannot conflict with.
+- **Cost.** One read per change document per listening instance, plus the first snapshot,
+  instead of a query per poll interval. On Cloud Run with request-based billing, an idle
+  instance gets no CPU; it catches up when the next request arrives, as Postgres' poller
+  would.
+
+`src/store/tests/cache_change_log.rs` checks that a second log sees committed changes, and
+does not see rolled-back ones or the ones before it started.
 
 ## Open questions
 - **Secret store.** Google Secret Manager (step 5)? Or should credentials be avoided altogether,

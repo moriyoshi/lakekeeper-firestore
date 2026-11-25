@@ -99,6 +99,46 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "namespace_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "typ",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tabulars",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "location_prefixes",
           "arrayConfig": "CONTAINS"
         }
@@ -479,6 +519,21 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "cache_changes",
+      "fieldPath": "domain",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "cache_changes",
+      "fieldPath": "keys",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tabulars",
+      "fieldPath": "generic",
+      "indexes": []
+    },
+    {
       "collectionGroup": "idx_snapshots",
       "fieldPath": "summary_other",
       "indexes": []
@@ -526,6 +581,12 @@
     {
       "collectionGroup": "idx_views",
       "fieldPath": "location",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idempotency_records",
+      "fieldPath": "expire_at",
+      "ttl": true,
       "indexes": []
     }
   ]

@@ -8,8 +8,8 @@
 use serde_json::{Value, json};
 
 use crate::store::docs::{
-    IDX_FIELDS, IDX_PARTITION_SPECS, IDX_SNAPSHOTS, IDX_TABLES, IDX_VIEWS, NAMESPACES, TABULARS,
-    TASK_SCHEDULES, TASKS,
+    CACHE_CHANGES, IDEMPOTENCY_RECORDS, IDX_FIELDS, IDX_PARTITION_SPECS, IDX_SNAPSHOTS, IDX_TABLES,
+    IDX_VIEWS, NAMESPACES, TABULARS, TASK_SCHEDULES, TASKS, USERS,
 };
 
 #[derive(Debug, Clone)]
@@ -55,6 +55,19 @@ fn indexes() -> Vec<(&'static str, Vec<F>)> {
                 Asc("created_at"),
             ],
         ),
+        // Generic table listing: live ones in a namespace.
+        (
+            TABULARS,
+            vec![
+                Asc("warehouse_id"),
+                Asc("namespace_id"),
+                Asc("typ"),
+                Asc("active"),
+                Asc("created_at"),
+            ],
+        ),
+        // User listing and search.
+        (USERS, vec![Asc("active"), Asc("created_at")]),
         // Tabulars stored below a location.
         (
             TABULARS,
@@ -125,7 +138,10 @@ fn indexes() -> Vec<(&'static str, Vec<F>)> {
 }
 
 /// Fields that no query filters or orders by, kept out of every index to save index writes.
-const EXEMPT: [(&str, &str); 10] = [
+const EXEMPT: [(&str, &str); 13] = [
+    (CACHE_CHANGES, "domain"),
+    (CACHE_CHANGES, "keys"),
+    (TABULARS, "generic"),
     (IDX_SNAPSHOTS, "summary_other"),
     (IDX_SNAPSHOTS, "manifest_list"),
     (IDX_SNAPSHOTS, "statistics"),
@@ -168,5 +184,13 @@ pub(crate) fn firestore_indexes(prefix: &str) -> Value {
             })
         })
         .collect();
+    let mut overrides = overrides;
+    // Expired idempotency records are deleted by a TTL policy. Nothing queries the field.
+    overrides.push(json!({
+        "collectionGroup": format!("{prefix}{IDEMPOTENCY_RECORDS}"),
+        "fieldPath": "expire_at",
+        "ttl": true,
+        "indexes": [],
+    }));
     json!({"indexes": indexes, "fieldOverrides": overrides})
 }

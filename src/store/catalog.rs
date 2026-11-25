@@ -113,19 +113,22 @@ impl CatalogStore for FirestoreBackend {
         change_set: &ChangeSet,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> std::result::Result<(), CatalogBackendError> {
-        // No change log yet: other instances keep stale entries until their TTL expires.
-        Ok(())
+        super::cache_change_log::record(&mut transaction.txn, change_set)
     }
 
     fn cache_change_log(catalog_state: Self::State) -> BoxedCacheChangeLog {
-        Box::new(super::cache_change_log::EmptyChangeLog)
+        Box::new(super::cache_change_log::FirestoreChangeLog::new(
+            catalog_state.db.clone(),
+        ))
     }
 
     async fn prune_cache_change_log(
         catalog_state: Self::State,
         retention: std::time::Duration,
     ) -> std::result::Result<Option<u64>, CatalogBackendError> {
-        Ok(None)
+        super::cache_change_log::prune(&catalog_state.db, retention)
+            .await
+            .map(Some)
     }
 
     async fn create_project<'a>(
@@ -423,7 +426,14 @@ impl CatalogStore for FirestoreBackend {
         force: bool,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'_>,
     ) -> std::result::Result<MovedNamespace, CatalogMoveNamespaceError> {
-        Err(unsupported("move_namespace_impl").into())
+        super::namespace::move_to(
+            warehouse_id,
+            namespace_id,
+            destination,
+            force,
+            &mut transaction.txn,
+        )
+        .await
     }
 
     async fn repair_namespace_path_casing_impl(
@@ -463,7 +473,7 @@ impl CatalogStore for FirestoreBackend {
         search_term: &str,
         catalog_state: Self::State,
     ) -> std::result::Result<CatalogSearchTabularResponse, SearchTabularError> {
-        Err(unsupported("search_tabular_impl").into())
+        super::tabular::search(warehouse_id, search_term, &mut catalog_state.latest()).await
     }
 
     async fn set_tabular_protected_impl(
@@ -661,7 +671,7 @@ impl CatalogStore for FirestoreBackend {
         creation: GenericTableCreation,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> std::result::Result<GenericTableInfo, CreateGenericTableError> {
-        Err(unsupported("create_generic_table_impl").into())
+        super::generic_table::create(creation, &mut transaction.txn).await
     }
 
     async fn load_generic_table_impl<'a>(
@@ -670,7 +680,8 @@ impl CatalogStore for FirestoreBackend {
         table_name: &str,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> std::result::Result<GenericTableInfo, LoadGenericTableError> {
-        Err(unsupported("load_generic_table_impl").into())
+        super::generic_table::load(warehouse_id, namespace_id, table_name, &mut transaction.txn)
+            .await
     }
 
     async fn load_generic_table_by_id_impl<'a>(
@@ -678,7 +689,7 @@ impl CatalogStore for FirestoreBackend {
         generic_table_id: GenericTableId,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> std::result::Result<GenericTableInfo, LoadGenericTableError> {
-        Err(unsupported("load_generic_table_by_id_impl").into())
+        super::generic_table::load_by_id(warehouse_id, generic_table_id, &mut transaction.txn).await
     }
 
     async fn list_generic_tables_impl<'a>(
@@ -692,8 +703,15 @@ impl CatalogStore for FirestoreBackend {
         PaginatedMapping<GenericTableId, GenericTableListEntry>,
         ListGenericTablesError,
     > {
-        // Creating generic tables is not supported yet, so there are none to list.
-        Ok(PaginatedMapping::with_capacity(0))
+        super::generic_table::list(
+            warehouse_id,
+            namespace_id,
+            namespace_ident,
+            page_size,
+            page_token,
+            &mut transaction.txn,
+        )
+        .await
     }
 
     async fn drop_generic_table_impl<'a>(
@@ -702,7 +720,8 @@ impl CatalogStore for FirestoreBackend {
         table_name: &str,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> std::result::Result<GenericTableId, DropGenericTableError> {
-        Err(unsupported("drop_generic_table_impl").into())
+        super::generic_table::drop(warehouse_id, namespace_id, table_name, &mut transaction.txn)
+            .await
     }
 
     async fn create_roles_impl<'a>(
@@ -1154,14 +1173,23 @@ impl CatalogStore for FirestoreBackend {
         mode: UserUpsertMode,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> Result<CreateOrUpdateUserResponse> {
-        Err(ErrorModel::from(unsupported("create_or_update_user")).into())
+        super::user::create_or_update(
+            user_id,
+            name,
+            email,
+            last_updated_with,
+            user_type,
+            mode,
+            &mut transaction.txn,
+        )
+        .await
     }
 
     async fn search_user(
         search_term: &str,
         catalog_state: Self::State,
     ) -> Result<SearchUserResponse> {
-        Err(ErrorModel::from(unsupported("search_user")).into())
+        super::user::search(search_term, &mut catalog_state.latest()).await
     }
 
     async fn list_user(
@@ -1170,14 +1198,20 @@ impl CatalogStore for FirestoreBackend {
         pagination: PaginationQuery,
         catalog_state: Self::State,
     ) -> Result<ListUsersResponse> {
-        Err(ErrorModel::from(unsupported("list_user")).into())
+        super::user::list(
+            filter_user_id,
+            filter_name,
+            pagination,
+            &mut catalog_state.latest(),
+        )
+        .await
     }
 
     async fn delete_user_impl<'a>(
         user_id: UserId,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> Result<Option<DeletedUser>> {
-        Err(ErrorModel::from(unsupported("delete_user_impl")).into())
+        super::user::delete(&user_id, &mut transaction.txn).await
     }
 
     async fn get_endpoint_statistics(
@@ -1187,7 +1221,7 @@ impl CatalogStore for FirestoreBackend {
         status_codes: Option<&[u16]>,
         catalog_state: Self::State,
     ) -> Result<EndpointStatisticsResponse> {
-        Err(ErrorModel::from(unsupported("get_endpoint_statistics")).into())
+        super::endpoint_statistics::get(range_specifier)
     }
 
     async fn pick_new_task_impl(
@@ -1444,7 +1478,7 @@ impl CatalogStore for FirestoreBackend {
         endpoint: lakekeeper::api::endpoints::EndpointFlat,
         state: Self::State,
     ) -> Result<lakekeeper::service::idempotency::IdempotencyCheck> {
-        Err(ErrorModel::from(unsupported("check_idempotency_key_impl")).into())
+        super::idempotency::check(&mut state.latest(), warehouse_id, key, endpoint).await
     }
 
     async fn try_insert_idempotency_key_impl<'a>(
@@ -1452,6 +1486,6 @@ impl CatalogStore for FirestoreBackend {
         info: &lakekeeper::service::idempotency::IdempotencyInfo,
         transaction: <Self::Transaction as Transaction<Self::State>>::Transaction<'a>,
     ) -> Result<bool> {
-        Err(ErrorModel::from(unsupported("try_insert_idempotency_key_impl")).into())
+        super::idempotency::try_insert(&mut transaction.txn, warehouse_id, info).await
     }
 }

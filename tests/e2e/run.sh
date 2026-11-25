@@ -7,7 +7,9 @@
 # emulator. Then it runs the server from target/debug, bootstraps it, creates a warehouse, and
 # runs check.py in a new process per mode: write, read back, purge a table, and see the purge
 # through the task management API, create, replace, rename and drop a view, move a table
-# into another namespace, and evolve a table and check what `lakekeeper-firestore search` finds.
+# into another namespace, evolve a table and check what `lakekeeper-firestore search` finds, and
+# replay a request by its idempotency key, move a namespace, create, list and drop a generic table,
+# search tabulars, and read endpoint statistics.
 # Needs docker, curl and uv.
 #
 # The server needs the GCS emulator support of the patched Lakekeeper (see [patch] in
@@ -78,7 +80,7 @@ export GCSFS_EXPERIMENTAL_ZB_HNS_SUPPORT=false
 # For `search`, which runs the CLI against the emulator.
 export FIRESTORE_EMULATOR_HOST="localhost:$FIRESTORE_PORT" LAKEKEEPER__FIRESTORE__PROJECT_ID=$PROJECT
 export LKFS_BIN="$PWD/target/debug/lakekeeper-firestore" RUST_LOG=error
-for mode in write reread purge tasks views rename search; do
+for mode in write reread purge tasks views rename search extras; do
     uv run --quiet --no-project --with 'pyiceberg[gcsfs,pyarrow]==0.10.0' \
         python $E2E/check.py "$mode" "http://$B/catalog"
 done

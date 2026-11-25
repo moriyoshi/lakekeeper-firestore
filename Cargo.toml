@@ -36,6 +36,7 @@ figment = { version = "0.10", features = ["env"] }
 # Exact: the raw gRPC client types it re-exports are outside its semver contract.
 firestore = "=0.67.0"
 flate2 = "1"
+futures = "0.3"
 serde_json = "1"
 reqwest = { version = "0.12.28", default-features = false, features = ["json"] }
 serde = { version = "1", features = ["derive"] }

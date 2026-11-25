@@ -3674,6 +3674,7 @@ dependencies = [
  "figment",
  "firestore",
  "flate2",
+ "futures",
  "lakekeeper",
  "lakekeeper-console",
  "lakekeeper-io",

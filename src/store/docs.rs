@@ -8,7 +8,7 @@
 //! | `warehouse_names` | `{project}:{folded name}` | [`NameMarker`] |
 //! | `namespaces` | namespace ID | [`NamespaceDoc`] |
 //! | `namespace_names` | `{warehouse}:{folded path}` | [`NameMarker`] |
-//! | `tabulars` | tabular ID | [`TabularDoc`] |
+//! | `tabulars` | tabular ID | [`TabularDoc`]: a table, view or generic table |
 //! | `tabular_names` | `{warehouse}:{namespace}:{folded name}` | [`NameMarker`] (active tabulars only) |
 //! | `tabular_locations` | `{warehouse}:{location}` | [`NameMarker`] |
 //! | `table_metadata` | table ID | [`StagedMetadataDoc`]: gzipped metadata JSON of a staged table |
@@ -17,6 +17,9 @@
 //! | `task_logs` | `{task ID}.{attempt, 10 digits}` | [`TaskLogDoc`]: one finished attempt |
 //! | `task_configs` | [`task_config_id`] | [`TaskConfigDoc`] |
 //! | `task_schedules` | schedule ID ([`task_schedule_id`]) | [`TaskScheduleDoc`] |
+//! | `users` | user ID | [`UserDoc`] |
+//! | `cache_changes` | random (`UUIDv7`) | [`CacheChangeDoc`]: changed cache keys of one write |
+//! | `idempotency_records` | `{warehouse}:{key}` | [`IdempotencyDoc`] |
 //! | `idx_tables` | table ID | [`IdxTable`](super::projection::IdxTable) |
 //! | `idx_views` | view ID | [`IdxView`](super::projection::IdxView) |
 //! | `idx_snapshots` | `{table}:{snapshot ID}` | [`IdxSnapshot`](super::projection::IdxSnapshot) |
@@ -56,6 +59,9 @@ pub(crate) const TASK_KEYS: &str = "task_keys";
 pub(crate) const TASK_LOGS: &str = "task_logs";
 pub(crate) const TASK_CONFIGS: &str = "task_configs";
 pub(crate) const TASK_SCHEDULES: &str = "task_schedules";
+pub(crate) const USERS: &str = "users";
+pub(crate) const CACHE_CHANGES: &str = "cache_changes";
+pub(crate) const IDEMPOTENCY_RECORDS: &str = "idempotency_records";
 pub(crate) const IDX_TABLES: &str = "idx_tables";
 pub(crate) const IDX_VIEWS: &str = "idx_views";
 pub(crate) const IDX_SNAPSHOTS: &str = "idx_snapshots";
@@ -137,7 +143,7 @@ pub(crate) struct NamespaceDoc {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct TabularDoc {
     pub(crate) tabular_id: uuid::Uuid,
-    /// `table` or `view`.
+    /// `table`, `view` or `generic-table`.
     pub(crate) typ: String,
     pub(crate) warehouse_id: WarehouseId,
     pub(crate) namespace_id: NamespaceId,
@@ -153,6 +159,59 @@ pub(crate) struct TabularDoc {
     pub(crate) deleted_at: Option<i64>,
     /// Whether the document is active (not soft-deleted); a query field.
     pub(crate) active: bool,
+    /// Generic tables only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) generic: Option<GenericTableDoc>,
+}
+
+/// What a generic table stores besides the tabular fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct GenericTableDoc {
+    pub(crate) format: String,
+    pub(crate) doc: Option<String>,
+    /// JSON.
+    pub(crate) schema: Option<String>,
+    /// JSON.
+    pub(crate) statistics: Option<String>,
+}
+
+/// Keys of one cache domain that a committed write changed; no keys for the whole domain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct CacheChangeDoc {
+    pub(crate) domain: String,
+    pub(crate) keys: Vec<String>,
+    pub(crate) recorded_at: i64,
+}
+
+/// A user; deleted ones stay, scrubbed, with `deleted_at` set.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct UserDoc {
+    pub(crate) id: String,
+    /// `None` for a role-provider stub that has no name yet.
+    pub(crate) name: Option<String>,
+    pub(crate) email: Option<String>,
+    /// Upstream's `user_last_updated_with`, kebab-case.
+    pub(crate) last_updated_with: String,
+    pub(crate) user_type: lakekeeper::api::management::v1::user::UserType,
+    pub(crate) created_at: i64,
+    pub(crate) updated_at: Option<i64>,
+    pub(crate) deleted_at: Option<i64>,
+    /// Whether the user is not deleted; a query field.
+    pub(crate) active: bool,
+}
+
+/// A committed success under an `Idempotency-Key`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct IdempotencyDoc {
+    pub(crate) warehouse_id: WarehouseId,
+    pub(crate) idempotency_key: uuid::Uuid,
+    /// [`EndpointFlat::name`](lakekeeper::api::endpoints::EndpointFlat::name).
+    pub(crate) operation: String,
+    pub(crate) http_status: i64,
+    pub(crate) created_at: i64,
+    /// A Firestore timestamp, for the TTL policy.
+    #[serde(with = "firestore::serialize_as_timestamp")]
+    pub(crate) expire_at: firestore::jiff::Timestamp,
 }
 
 /// The initial metadata of a staged table, which has no metadata file until its first commit.

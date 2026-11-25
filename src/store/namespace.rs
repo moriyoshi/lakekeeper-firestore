@@ -15,11 +15,12 @@ use lakekeeper::{
     api::iceberg::v1::{PaginatedMapping, namespace::NamespaceDropFlags},
     service::{
         CatalogBackendError, CatalogCreateNamespaceError, CatalogGetNamespaceError,
-        CatalogListNamespaceError, CatalogListNamespacesResponse, CatalogNamespaceDropError,
-        CatalogSetNamespaceProtectedError, CatalogUpdateNamespacePropertiesError,
-        ChildNamespaceProtected, ChildTabularProtected, CreateNamespaceRequest,
-        InvalidNamespaceIdentifier, InvalidPaginationToken, ListNamespacesQuery, Location,
-        Namespace, NamespaceAlreadyExists, NamespaceDropInfo,
+        CatalogListNamespaceError, CatalogListNamespacesResponse, CatalogMoveNamespaceError,
+        CatalogNamespaceDropError, CatalogSetNamespaceProtectedError,
+        CatalogUpdateNamespacePropertiesError, ChildNamespaceProtected, ChildTabularProtected,
+        CreateNamespaceRequest, InvalidNamespaceIdentifier, InvalidPaginationToken,
+        ListNamespacesQuery, Location, MovedNamespace, Namespace, NamespaceAlreadyExists,
+        NamespaceCannotMoveIntoSelf, NamespaceDropInfo, NamespaceHasChildren,
         NamespaceHasRunningTabularExpirations, NamespaceId, NamespaceIdent, NamespaceNotEmpty,
         NamespaceNotFound, NamespaceProtected, NamespaceVersion, NamespaceWithParent,
         UpdatedNamespaceProperties, WarehouseIdNotFound,
@@ -539,4 +540,111 @@ pub(super) async fn set_protected(
         })
         .await?;
     Ok(namespace)
+}
+
+/// Move the namespace to `destination`, following upstream's Postgres store: only a namespace
+/// without children moves, so only its document and name marker change. Its tabulars refer to
+/// it by ID.
+pub(super) async fn move_to(
+    warehouse_id: WarehouseId,
+    namespace_id: NamespaceId,
+    destination: &NamespaceIdent,
+    force: bool,
+    txn: &mut Txn,
+) -> Result<MovedNamespace, CatalogMoveNamespaceError> {
+    if warehouse::read_active(txn, warehouse_id).await?.is_none() {
+        return Err(NamespaceNotFound::new(warehouse_id, namespace_id).into());
+    }
+    let source = read(txn, namespace_id)
+        .await?
+        .filter(|d| d.warehouse_id == warehouse_id)
+        .ok_or_else(|| NamespaceNotFound::new(warehouse_id, namespace_id))?;
+    let source_parent = if source.name.len() > 1 {
+        read_by_path(txn, warehouse_id, &source.name[..source.name.len() - 1]).await?
+    } else {
+        None
+    };
+    let previous_ident = ident(warehouse_id, &source.name)?;
+    let previous_parent = source_parent.as_ref().map(|p| p.namespace_id);
+    // The same path, byte for byte: a retried move succeeds.
+    if source.name == destination.as_ref()[..] {
+        return Ok(MovedNamespace {
+            namespace: build(&source, source_parent.as_ref(), None)?,
+            previous_ident,
+            previous_parent,
+        });
+    }
+    if source.protected && !force {
+        return Err(NamespaceProtected::new(warehouse_id, namespace_id).into());
+    }
+    // Every descendant is below a child, so one child is enough to refuse.
+    let children = txn
+        .query(
+            &Query::new(NAMESPACES)
+                .eq("warehouse_id", string_value(warehouse_id.to_string()))
+                .eq("parent_key", string_value(path_key(&source.name)))
+                .limit(Some(1)),
+        )
+        .await?;
+    if !children.is_empty() {
+        return Err(NamespaceHasChildren::new(warehouse_id, namespace_id).into());
+    }
+    let parent = match destination.parent() {
+        Some(parent_ident) => {
+            let parent = read_by_path(txn, warehouse_id, parent_ident.as_ref())
+                .await?
+                .ok_or_else(|| NamespaceNotFound::new(warehouse_id, parent_ident.clone()))?;
+            if parent.namespace_id == namespace_id {
+                return Err(NamespaceCannotMoveIntoSelf::new(warehouse_id, namespace_id).into());
+            }
+            Some(parent)
+        }
+        None => None,
+    };
+    // The parent's stored spelling plus the caller's spelling of the leaf, as in `create`.
+    let written: Vec<String> = match &parent {
+        Some(p) => p
+            .name
+            .iter()
+            .cloned()
+            .chain(destination.as_ref().last().cloned())
+            .collect(),
+        None => destination.as_ref().clone(),
+    };
+    // Differs only in the case of the ancestors: nothing to write.
+    if written == source.name {
+        let namespace = build(&source, parent.as_ref(), None)?;
+        return Ok(MovedNamespace {
+            namespace,
+            previous_ident,
+            previous_parent,
+        });
+    }
+    let old_marker = marker_name(txn, warehouse_id, &source.name);
+    let new_marker = marker_name(txn, warehouse_id, &written);
+    // A change of case alone keeps the marker.
+    if new_marker != old_marker {
+        if txn.get(&new_marker).await?.is_some() {
+            return Err(NamespaceAlreadyExists::new(warehouse_id, destination.clone()).into());
+        }
+        txn.delete(old_marker);
+        txn.create(to_doc(
+            new_marker,
+            &NameMarker {
+                id: namespace_id.to_string(),
+            },
+        )?);
+    }
+    let mut doc = source;
+    doc.parent_key = path_key(&written[..written.len() - 1]);
+    doc.depth = i64::try_from(written.len()).unwrap_or(i64::MAX);
+    doc.name = written;
+    doc.version += 1;
+    doc.updated_at = Some(now_micros());
+    txn.set(to_doc(doc_name(txn, namespace_id), &doc)?);
+    Ok(MovedNamespace {
+        namespace: build(&doc, parent.as_ref(), None)?,
+        previous_ident,
+        previous_parent,
+    })
 }

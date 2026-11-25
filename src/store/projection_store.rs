@@ -27,7 +27,7 @@ use super::{
         project, project_view, table_of, view_changes, view_of,
     },
     projection_task,
-    tabular::TABLE,
+    tabular::{GENERIC_TABLE, TABLE},
 };
 
 /// The most projection documents a transaction writes or deletes; more is left to a task.
@@ -272,6 +272,9 @@ pub(super) async fn identity_changed(
     txn: &mut Txn,
     t: &TabularDoc,
 ) -> Result<(), CatalogBackendError> {
+    if t.typ == GENERIC_TABLE {
+        return Ok(());
+    }
     let identity = identity(t);
     if t.typ == TABLE {
         let Some(mut table) = read_table(txn, t.tabular_id).await? else {
@@ -294,6 +297,9 @@ pub(super) async fn identity_changed(
 
 /// Delete the projection of `t`, which is being dropped.
 pub(super) async fn dropped(txn: &mut Txn, t: &TabularDoc) -> Result<(), CatalogBackendError> {
+    if t.typ == GENERIC_TABLE {
+        return Ok(());
+    }
     let id = t.tabular_id;
     let (pending, documents, collections): (bool, i64, &[&'static str]) = if t.typ == TABLE {
         let Some(table) = read_table(txn, id).await? else {

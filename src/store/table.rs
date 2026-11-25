@@ -130,6 +130,7 @@ pub(super) async fn create(
         updated_at: None,
         deleted_at: None,
         active: true,
+        generic: None,
     };
     tabular::write_docs(txn, &doc, true)?;
     if doc.metadata_location.is_none() {

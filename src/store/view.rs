@@ -75,6 +75,7 @@ pub(super) async fn create(
         updated_at: None,
         deleted_at: None,
         active: true,
+        generic: None,
     };
     tabular::write_docs(txn, &doc, true)?;
     projection_store::view_created(txn, &doc, metadata).await?;

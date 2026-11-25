@@ -1,19 +1,24 @@
-//! Tabulars (tables and views): shared lookups, listing, protection and deletion.
+//! Tabulars (tables, views and generic tables): shared lookups, listing, protection and
+//! deletion.
 
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use lakekeeper::{
     WarehouseId,
     api::{iceberg::v1::PaginationQuery, management::v1::TabularType},
     service::{
-        CatalogBackendError, ClearTabularDeletedAtError, DropTabularError, ExpirationTaskInfo,
+        CatalogBackendError, CatalogSearchTabularInfo, CatalogSearchTabularResponse,
+        ClearTabularDeletedAtError, DropTabularError, ExpirationTaskInfo,
         GetTabularInfoByLocationError, GetTabularInfoError, InternalParseLocationError,
         InvalidNamespaceIdentifier, InvalidPaginationToken, ListTabularsError, Location,
         MarkTabularAsDeletedError, NamespaceId, NamespaceIdent, NamespaceVersion,
-        ProtectedTabularDeletionWithoutForce, RenameTabularError, SetTabularProtectionError,
-        TableIdent, TableInfo, TabularAlreadyExists, TabularDeletionInfo, TabularId,
-        TabularIdentBorrowed, TabularInfo, TabularListFlags, TabularNotFound,
-        ViewOrTableDeletionInfo, ViewOrTableInfo, WarehouseVersion, tasks::TaskId,
+        ProtectedTabularDeletionWithoutForce, RenameTabularError, SearchTabularError,
+        SetTabularProtectionError, TableIdent, TableInfo, TabularAlreadyExists,
+        TabularDeletionInfo, TabularId, TabularIdentBorrowed, TabularInfo, TabularListFlags,
+        TabularNotFound, ViewOrTableDeletionInfo, ViewOrTableInfo, WarehouseVersion, tasks::TaskId,
     },
 };
 
@@ -23,12 +28,15 @@ use super::{
         WarehouseDoc, from_micros, location_prefixes, now_micros, tabular_location_id,
         tabular_name_id,
     },
-    fs::{Query, Txn, backend_error, fold_case, from_doc, int_value, string_value, to_doc},
+    fs::{
+        Query, Txn, backend_error, bool_value, fold_case, from_doc, int_value, string_value, to_doc,
+    },
     namespace, projection_store, warehouse,
 };
 
 pub(super) const TABLE: &str = "table";
 pub(super) const VIEW: &str = "view";
+pub(super) const GENERIC_TABLE: &str = "generic-table";
 
 pub(super) fn doc_name(txn: &Txn, id: uuid::Uuid) -> String {
     txn.db().doc_name(TABULARS, &id.to_string())
@@ -52,6 +60,7 @@ pub(super) fn tabular_id(t: &TabularDoc) -> Result<TabularId, CatalogBackendErro
     match t.typ.as_str() {
         TABLE => Ok(TabularId::Table(t.tabular_id.into())),
         VIEW => Ok(TabularId::View(t.tabular_id.into())),
+        GENERIC_TABLE => Ok(TabularId::GenericTable(t.tabular_id.into())),
         other => Err(backend_error(std::io::Error::other(format!(
             "Unknown tabular type `{other}`"
         )))),
@@ -402,7 +411,8 @@ impl_from_info_error!(
     MarkTabularAsDeletedError,
     DropTabularError,
     ClearTabularDeletedAtError,
-    RenameTabularError
+    RenameTabularError,
+    SearchTabularError
 );
 
 pub(super) async fn get_by_ident(
@@ -419,7 +429,7 @@ pub(super) async fn get_by_ident(
         let (ident, typ) = match requested {
             TabularIdentBorrowed::Table(i) => (*i, TABLE),
             TabularIdentBorrowed::View(i) => (*i, VIEW),
-            TabularIdentBorrowed::GenericTable(_) => continue,
+            TabularIdentBorrowed::GenericTable(i) => (*i, GENERIC_TABLE),
         };
         let Some(ns) = namespace::read_by_path(txn, warehouse_id, ident.namespace.as_ref()).await?
         else {
@@ -544,8 +554,7 @@ pub(super) async fn list(
     let typ = typ.map(|t| match t {
         TabularType::Table => TABLE,
         TabularType::View => VIEW,
-        // Generic tables are not stored yet.
-        TabularType::GenericTable => "",
+        TabularType::GenericTable => GENERIC_TABLE,
     });
     if let Some(typ) = typ {
         query = query.eq("typ", string_value(typ));
@@ -695,7 +704,7 @@ pub(super) async fn rename(
         .filter(|t| {
             t.warehouse_id == warehouse_id
                 && tabular_id(t).is_ok_and(|typ| typ == id)
-                && t.metadata_location.is_some()
+                && (t.metadata_location.is_some() || t.typ == GENERIC_TABLE)
                 && t.deleted_at.is_none()
                 && t.namespace_id == source_namespace_id
                 && same(&t.name, &source.name)
@@ -753,4 +762,108 @@ pub(super) async fn drop(
     delete_docs(txn, &t);
     projection_store::dropped(txn, &t).await?;
     Ok(Location::from_str(&t.location).map_err(InternalParseLocationError::from)?)
+}
+
+/// Upstream's search returns at most this many tabulars.
+const SEARCH_LIMIT: usize = 10;
+
+/// `pg_trgm`'s trigrams of `s`: of each alphanumeric word, lowercased and padded with two
+/// spaces before and one after.
+fn trigrams(s: &str) -> HashSet<[char; 3]> {
+    let mut out = HashSet::new();
+    for word in s
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+    {
+        let padded: Vec<char> = "  "
+            .chars()
+            .chain(word.to_lowercase().chars())
+            .chain(" ".chars())
+            .collect();
+        for w in padded.windows(3) {
+            out.insert([w[0], w[1], w[2]]);
+        }
+    }
+    out
+}
+
+/// `pg_trgm`'s distance (`<->`): one minus the share of trigrams the two have in common.
+#[allow(clippy::cast_precision_loss)]
+fn trigram_distance(a: &HashSet<[char; 3]>, b: &str) -> f32 {
+    let b = trigrams(b);
+    let common = a.intersection(&b).count();
+    let all = a.len() + b.len() - common;
+    if all == 0 {
+        return 1.0;
+    }
+    1.0 - common as f32 / all as f32
+}
+
+/// The management API's tabular search, following upstream's Postgres store: a UUID finds the
+/// tabular with that ID and the tabulars of the namespace with that ID; any other term finds
+/// the ten tabulars whose `namespace.name` is nearest to it by trigram distance (below 1).
+/// Reads every active tabular of the warehouse, where upstream uses a trigram index.
+pub(super) async fn search(
+    warehouse_id: WarehouseId,
+    search_term: &str,
+    txn: &mut Txn,
+) -> Result<CatalogSearchTabularResponse, SearchTabularError> {
+    let mut search_results = Vec::new();
+    if warehouse::read_active(txn, warehouse_id).await?.is_none() {
+        return Ok(CatalogSearchTabularResponse { search_results });
+    }
+    let live = |t: &TabularDoc| {
+        t.warehouse_id == warehouse_id
+            && t.deleted_at.is_none()
+            && (t.metadata_location.is_some() || t.typ == GENERIC_TABLE)
+    };
+    let mut found: Vec<(TabularDoc, Option<f32>)> = Vec::new();
+    if let Ok(id) = uuid::Uuid::try_parse(search_term) {
+        if let Some(t) = read(txn, id).await?.filter(live) {
+            found.push((t, None));
+        }
+        let in_namespace = read_in_namespace(txn, warehouse_id, NamespaceId::from(id)).await?;
+        found.extend(
+            in_namespace
+                .into_iter()
+                .filter(|t| live(t) && t.tabular_id != id)
+                .map(|t| (t, None)),
+        );
+        found.truncate(SEARCH_LIMIT);
+    } else {
+        let docs: Vec<TabularDoc> = txn
+            .query(
+                &Query::new(TABULARS)
+                    .eq("warehouse_id", string_value(warehouse_id.to_string()))
+                    .eq("active", bool_value(true)),
+            )
+            .await?
+            .iter()
+            .map(from_doc)
+            .collect::<Result<_, _>>()?;
+        let docs: Vec<TabularDoc> = docs.into_iter().filter(live).collect();
+        let ctx = Context::load(txn, &docs).await?;
+        let term = trigrams(search_term);
+        for t in docs {
+            let Some(ns) = ctx.namespaces.get(&t.namespace_id) else {
+                continue;
+            };
+            let full = format!("{}.{}", ns.name.join("."), t.name);
+            let distance = trigram_distance(&term, &full);
+            if distance < 1.0 {
+                found.push((t, Some(distance)));
+            }
+        }
+        found.sort_by(|a, b| a.1.unwrap_or(1.0).total_cmp(&b.1.unwrap_or(1.0)));
+        found.truncate(SEARCH_LIMIT);
+    }
+    let docs: Vec<TabularDoc> = found.iter().map(|(t, _)| t.clone()).collect();
+    let ctx = Context::load(txn, &docs).await?;
+    for (t, distance) in &found {
+        search_results.push(CatalogSearchTabularInfo {
+            tabular: ctx.view_or_table(t)?,
+            distance: *distance,
+        });
+    }
+    Ok(CatalogSearchTabularResponse { search_results })
 }

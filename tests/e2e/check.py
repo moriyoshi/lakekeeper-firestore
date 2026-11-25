@@ -1,6 +1,6 @@
 """pyiceberg checks for run.sh. `write` runs first; the other modes run in new processes.
 
-Usage: check.py write|reread|purge|tasks|views|rename|search CATALOG_URL
+Usage: check.py write|reread|purge|tasks|views|rename|search|extras CATALOG_URL
 
 `search` runs the binary named by $LKFS_BIN, with the Firestore settings of the environment.
 """
@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 import pyarrow as pa
@@ -91,13 +92,24 @@ def rename(cat: RestCatalog) -> None:
     check("check_old_name_free", cat.table_exists("events.old"), False)
 
 
-def request(url: str, body=None, method=None):
+def request(url: str, body=None, method=None, headers=None):
     data = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(
-        url, data=data, method=method, headers={"content-type": "application/json"}
+        url,
+        data=data,
+        method=method,
+        headers={"content-type": "application/json", **(headers or {})},
     )
     with urllib.request.urlopen(req) as resp:
         return json.load(resp) if resp.status != 204 else None
+
+
+def status_of(url: str, body=None, method=None, headers=None) -> int:
+    try:
+        request(url, body, method, headers)
+        return 200
+    except urllib.error.HTTPError as e:
+        return e.code
 
 
 def view_version(version_id: int, sql: str) -> dict:
@@ -194,6 +206,67 @@ def tasks(url: str) -> None:
             break
         time.sleep(1)
     check("check_projection_repaired", status, "SUCCESS")
+
+
+def extras(url: str) -> None:
+    # Idempotency keys, namespace moves, generic tables, tabular search and endpoint
+    # statistics, over REST.
+    prefix = request(f"{url}/v1/config?warehouse=errtraq")["defaults"]["prefix"]
+    namespaces = f"{url}/v1/{prefix}/namespaces"
+    key = {"Idempotency-Key": "01938f4e-7c5a-7d3e-8a1b-2c3d4e5f6a7b"}
+    first = request(namespaces, {"namespace": ["staging"]}, headers=key)
+    again = request(namespaces, {"namespace": ["staging"]}, headers=key)
+    check("check_idempotent_replay", again["namespace"], first["namespace"])
+    check(
+        "check_idempotency_key_reused",
+        status_of(f"{namespaces}/staging", method="DELETE", headers=key),
+        400,
+    )
+    check("check_without_key_conflicts", status_of(namespaces, {"namespace": ["staging"]}), 409)
+
+    base = url.removesuffix("/catalog")
+    management = f"{base}/management/v1"
+    warehouses = request(f"{management}/warehouse")["warehouses"]
+    wh = next(w["warehouse-id"] for w in warehouses if w["name"] == "errtraq")
+    return_ids = request(f"{namespaces}?returnUuids=true")
+    ns_id = return_ids["namespace-uuids"][return_ids["namespaces"].index(["staging"])]
+    request(
+        f"{management}/warehouse/{wh}/namespace/{ns_id}/move",
+        {"destination": ["events", "staged"]},
+    )
+    check(
+        "check_namespace_moved",
+        (status_of(f"{namespaces}/staging"), status_of(f"{namespaces}/events%1Fstaged")),
+        (404, 200),
+    )
+
+    generic = f"{base}/lakekeeper/v1/{prefix}/namespaces/events%1Fstaged/generic-tables"
+    request(
+        generic,
+        {"name": "vectors", "format": "lance", "doc": "embeddings", "properties": {"a": "b"}},
+    )
+    loaded = request(f"{generic}/vectors")["table"]
+    check(
+        "check_generic_table_loaded",
+        (loaded["format"], loaded["doc"], loaded["properties"].get("a")),
+        ("lance", "embeddings", "b"),
+    )
+    check(
+        "check_generic_table_listed",
+        [t["name"] for t in request(generic)["identifiers"]],
+        ["vectors"],
+    )
+    found = request(f"{management}/warehouse/{wh}/search-tabular", {"search": "vectors"})
+    check(
+        "check_tabular_search",
+        [t["tabular-name"] for t in found["tabulars"]][:1],
+        ["vectors"],
+    )
+    request(f"{generic}/vectors", method="DELETE")
+    check("check_generic_table_dropped", request(generic)["identifiers"], [])
+
+    stats = request(f"{management}/endpoint-statistics", {"warehouse": {"type": "all"}})
+    check("check_endpoint_statistics", stats["called-endpoints"], [])
 
 
 def search_cli(*args: str) -> list[dict]:
@@ -308,5 +381,7 @@ if __name__ == "__main__":
         views(url)
     elif mode == "search":
         search(url)
+    elif mode == "extras":
+        extras(url)
     else:
         {"write": write, "reread": reread, "purge": purge, "rename": rename}[mode](catalog(url))

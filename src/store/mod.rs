@@ -15,8 +15,11 @@ use lakekeeper::{
 mod cache_change_log;
 mod catalog;
 mod docs;
+mod endpoint_statistics;
 mod files;
 mod fs;
+mod generic_table;
+mod idempotency;
 mod namespace;
 mod project;
 mod projection;
@@ -30,6 +33,7 @@ mod task_admin;
 mod tasks;
 #[cfg(test)]
 mod tests;
+mod user;
 mod view;
 mod warehouse;
 

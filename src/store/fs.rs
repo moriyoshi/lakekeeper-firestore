@@ -103,6 +103,40 @@ impl Db {
         Ok(docs)
     }
 
+    /// Listen to `query` on top-level `collection` as target `target_id`, from the start or
+    /// after `resume_token`. The stream stays open until the server ends it.
+    pub(crate) async fn listen(
+        &self,
+        collection: &str,
+        mut query: StructuredQuery,
+        target_id: i32,
+        resume_token: Option<Vec<u8>>,
+    ) -> Result<tonic::codec::Streaming<pb::ListenResponse>, tonic::Status> {
+        use futures::StreamExt as _;
+        query.from = vec![structured_query::CollectionSelector {
+            collection_id: self.collection_id(collection),
+            all_descendants: false,
+        }];
+        let request = pb::ListenRequest {
+            database: self.database(),
+            labels: HashMap::new(),
+            request_options: None,
+            target_change: Some(pb::listen_request::TargetChange::AddTarget(pb::Target {
+                target_id,
+                once: false,
+                expected_count: None,
+                target_type: Some(pb::target::TargetType::Query(pb::target::QueryTarget {
+                    parent: self.documents().to_string(),
+                    query_type: Some(pb::target::query_target::QueryType::StructuredQuery(query)),
+                })),
+                resume_type: resume_token.map(pb::target::ResumeType::ResumeToken),
+            })),
+        };
+        // The request stream must stay open: closing it ends the listen.
+        let requests = futures::stream::iter([request]).chain(futures::stream::pending());
+        Ok(self.client().listen(requests).await?.into_inner())
+    }
+
     fn client(
         &self,
     ) -> firestore::gcloud_sdk::google::firestore::v1::firestore_client::FirestoreClient<
@@ -161,6 +195,12 @@ pub(crate) fn from_doc<T: DeserializeOwned>(doc: &Document) -> Result<T, Catalog
 pub(crate) fn string_value(s: impl Into<String>) -> Value {
     Value {
         value_type: Some(ValueType::StringValue(s.into())),
+    }
+}
+
+pub(crate) fn bool_value(b: bool) -> Value {
+    Value {
+        value_type: Some(ValueType::BooleanValue(b)),
     }
 }
 

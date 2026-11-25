@@ -502,15 +502,21 @@ async fn namespaces_list_in_pages() {
     assert_eq!(names, ["n1", "n2", "n3"]);
 }
 
+mod cache_change_log;
+mod generic_table;
+mod idempotency;
 mod metadata_size;
+mod namespace_move;
 mod projection;
 mod projection_cost;
 mod projection_store;
 mod rename;
 mod search;
+mod search_tabular;
 mod soft_delete;
 mod table;
 mod task_admin;
 mod tasks;
+mod user;
 mod view;
 mod view_projection;
