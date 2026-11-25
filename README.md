@@ -4,12 +4,24 @@
 catalog store. It is built as an independent crate on top of Lakekeeper's generic server. It patches
 Lakekeeper only for testing on emulators (see `[patch]` in `Cargo.toml`).
 
-Status: early, tested on the emulators only. Projects, warehouses, namespaces (including moves),
-tables, views, generic tables, tags, tasks, users, idempotency keys and the cache change log (for
-several instances) work. Storage credentials must use the server's own identity: keys are refused.
-Roles and grants are out of scope, as this is meant for a small, self-contained installation behind
-the allow-all authorizer. See
-[DESIGN.md](./DESIGN.md) for the approach, the plan and the known gaps.
+Status: early. Projects, warehouses, namespaces (including moves), tables, views, generic
+tables, tags, tasks, users, idempotency keys and the cache change log (for several instances)
+work. Storage credentials must use the server's own identity: keys are refused. Roles and
+grants are out of scope, as this is meant for a small, self-contained installation behind the
+allow-all authorizer. See [DESIGN.md](./DESIGN.md) for the approach, the plan and the known
+gaps.
+
+Tested:
+
+- On the Firestore emulator: the store's tests, the end-to-end suite on GCS (storage-testbench),
+  several instances on one database, and upstream Lakekeeper's pyiceberg suite on S3
+  (winterbaume).
+- On a real Google Cloud project (a sandbox, since destroyed): the Terraform stack with every
+  index, the image built on Cloud Build, and the service on Cloud Run behind IAM on real
+  Firestore and GCS. pyiceberg created, wrote, deleted from and read back a table with
+  STS-vended GCS tokens, a purge ran as a background task, and the console was served. Not
+  checked there: several instances, and `gcloud run services proxy` (see DEPLOY.md, "Checked
+  so far").
 
 ```sh
 cargo build
@@ -19,9 +31,13 @@ FIRESTORE_EMULATOR_HOST=localhost:8080 \
 LAKEKEEPER__FIRESTORE__PROJECT_ID=demo-lakekeeper \
   ./target/debug/lakekeeper-firestore serve
 
-# End-to-end check on GCS (Docker, uv; host port 80 must be free for the
-# storage-testbench emulator). Builds against the patched Lakekeeper from branch
-# gcs-emulator-0.15.1 of github.com/moriyoshi/lakekeeper (see [patch] in Cargo.toml):
+# The store's tests, on a Firestore emulator (skipped without FIRESTORE_EMULATOR_HOST):
+FIRESTORE_EMULATOR_HOST=localhost:28080 cargo test
+
+# End-to-end check on GCS, several instances on one database included (Docker, uv; host
+# port 80 must be free for the storage-testbench emulator). Builds against the patched
+# Lakekeeper from branch gcs-emulator-0.15.1 of github.com/moriyoshi/lakekeeper (see
+# [patch] in Cargo.toml):
 uv run --project tests pytest tests/e2e
 
 # Upstream Lakekeeper's pyiceberg REST suite (Docker, uv, `cargo install winterbaume-server`):
@@ -47,9 +63,12 @@ Only the allow-all authorizer is wired up.
 
 ## Deploying
 
-`Dockerfile` builds the server image (`--build-arg FEATURES=ui` adds the console), and
-[DEPLOY.md](./DEPLOY.md) walks through Cloud Run: Firestore and its indexes, IAM, the service
-and client access through Cloud Run IAM.
+`Dockerfile` builds the server image with BuildKit (`--build-arg FEATURES=ui` adds the
+console). It cross-compiles for the target platform, so an arm64 machine builds Cloud Run's
+amd64 image without emulation. [DEPLOY.md](./DEPLOY.md) walks through Cloud Run: Firestore
+and its indexes, IAM, the service, and client access through Cloud Run IAM. The same steps
+are a Terraform stack in `deploy/terraform`, with `deploy/cloudbuild.yaml` to build the image
+on Cloud Build.
 
 ## Trying the console on emulators
 
@@ -78,4 +97,4 @@ lakekeeper-firestore search largest --by files-size --json
 `lakekeeper-firestore search indexes` prints the `firestore.indexes.json` that the catalog and
 these searches need, for the configured collection prefix; `firestore.indexes.json` in this
 repository is the one for no prefix. It is in the Firebase CLI's format, for
-`firebase deploy --only firestore:indexes`.
+`firebase deploy --only firestore:indexes`; the Terraform stack reads it too.
