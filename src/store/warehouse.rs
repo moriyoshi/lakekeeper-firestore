@@ -177,7 +177,11 @@ pub(super) async fn delete_warehouse(
     if doc.protected && !force {
         return Err(WarehouseProtected::new().into());
     }
-    let unfinished = super::tasks::active_task_counts(txn, warehouse_id).await?;
+    // Read outside the transaction, as Postgres counts them under READ COMMITTED without
+    // locking out new tasks: locking the task range here contends with every instance's
+    // task workers, and the emulator aborted deletes with "Transaction lock timeout".
+    let unfinished =
+        super::tasks::active_task_counts(&mut Txn::latest(txn.db().clone()), warehouse_id).await?;
     if !unfinished.is_empty() {
         let tasks = unfinished
             .iter()

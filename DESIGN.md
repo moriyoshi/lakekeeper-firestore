@@ -243,12 +243,21 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
        upstream's console-components from git, with `vite-plugin-dts`), and 2.7 GB for the
        largest rustc. `CARGO_BUILD_JOBS` (default 2) and a 2 GB Node heap bound it; a 1.5 GB
        heap is too small. On `E2_HIGHCPU_8` (8 GB), 4 jobs built in 19 minutes. A local
-       build on a VM with 3 GB free still ran out of memory at 2 jobs, in the main crate.
+       build on a VM with 3 GB free ran out of memory at 2 jobs, in the main crate, and
+       built with 1 job; `tests/image` passed against that image (270 MB).
      - The new project's Cloud Build quota refused `E2_HIGHCPU_32`.
      - Terraform with a one-hour access token outlived it on the index builds; indexes left
        building were imported afterwards.
-     - Not checked: `gcloud run services proxy` (it needs a CLI component), several
-       instances at once, and a keyed credential refused by the store on a real project.
+     - Not checked: `gcloud run services proxy` (it needs a CLI component), and a keyed
+       credential refused by the store on a real project.
+   - **Several instances (2026-11-25, on the emulator):** `tests/e2e/test_instances.py` runs
+     two more servers on the e2e database, with hour-long cache entries: one evicts a renamed
+     or dropped warehouse within seconds, from the change log, while one with invalidation off
+     keeps serving it, which shows the lookup is cached. Loading a namespace is not cached, so
+     namespaces are not checked that way. With three servers polling their task queues, the
+     emulator aborted warehouse deletes ("Transaction lock timeout"): the delete counted
+     unfinished tasks inside its transaction, contending with every claim. It now counts them
+     outside it, as Postgres counts them under READ COMMITTED without locking out new tasks.
 
 ## Plan: normalized table metadata (drafted 2026-11-24)
 

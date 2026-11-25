@@ -244,6 +244,7 @@ On a sandbox project (2026-11-25), with the Terraform stack, then destroyed:
 - The service logged no errors but those provoked on purpose, and no missing-index errors.
 
 Not checked: `gcloud run services proxy` (above); a key refused by the secret store, which
-storage validation reaches first with a made-up key; several instances at once; a service
-account's ID token (`--audiences`); and the Firebase CLI route of step 2, which the Terraform
+storage validation reaches first with a made-up key; several instances at once on Cloud Run
+(on the emulator, `tests/e2e/test_instances.py` checks that their caches follow each other's
+changes); a service account's ID token (`--audiences`); and the Firebase CLI route of step 2, which the Terraform
 stack replaces.

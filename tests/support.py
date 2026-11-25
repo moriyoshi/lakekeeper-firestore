@@ -88,6 +88,7 @@ class Server:
 
     def __init__(self, port: int, env: dict[str, str], log: Path):
         self.url = f"http://localhost:{port}"
+        self.env = env
         self.log = log
         self.process = subprocess.Popen(
             [str(BINARY), "serve"],

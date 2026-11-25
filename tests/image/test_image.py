@@ -66,7 +66,7 @@ def url():
             support.docker("rm", "-f", name, check=False)
 
 
-def test_version():
+def test_version(url):
     assert run_image("version") == "0.1.0"
 
 
