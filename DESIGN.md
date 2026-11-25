@@ -143,7 +143,8 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
      per candidate, so the signer got three answers and failed every signed write with 500.
      The store now reads each document once, as Postgres returns a row once. With vended
      credentials every test fails at warehouse creation: winterbaume's AssumeRole wants a
-     `RoleArn`, as AWS does, and the suite's MinIO-flavoured profiles send none.
+     `RoleArn`, as AWS does, and the suite's MinIO-flavoured profiles send none (filed as
+     https://github.com/moriyoshi/winterbaume/issues/77, a MinIO-compatibility request).
 5. **Remaining methods.** Namespace move, roles and grants, statistics and the cache change
    log. Add the secret store on Google Secret Manager. Done (2026-11-24):
    - the task queue (see "Task queue");

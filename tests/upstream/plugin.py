@@ -16,7 +16,8 @@ a stand-in token endpoint that hands out a placeholder. The suite's S3 credentia
 which the Firestore secret store refuses, so the server keeps secrets in memory here.
 `KEEP_LOG=path` keeps the server's log. `LAKEKEEPER_TEST__S3_STS_MODE=disabled` leaves out the
 vended-credential half of the suite, which winterbaume cannot serve yet (its AssumeRole wants a
-RoleArn, and the suite's MinIO-flavoured storage profiles send none). The ports can be overridden through the environment,
+RoleArn, and the suite's MinIO-flavoured storage profiles send none; see
+https://github.com/moriyoshi/winterbaume/issues/77). The ports can be overridden through the environment,
 and differ from the e2e test's, so a running console demo is left alone.
 """
 
