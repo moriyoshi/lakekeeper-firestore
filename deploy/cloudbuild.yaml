@@ -1,0 +1,24 @@
+# Builds the image on Cloud Build, with the console unless _FEATURES is empty:
+#
+#   gcloud builds submit --config deploy/cloudbuild.yaml \
+#     --substitutions _IMAGE=REGION-docker.pkg.dev/PROJECT/lakekeeper/lakekeeper-firestore:TAG .
+#
+# A release build of Lakekeeper is large: the machine type and timeout below allow for it.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=FEATURES=${_FEATURES}
+      - --build-arg=CARGO_BUILD_JOBS=${_CARGO_BUILD_JOBS}
+      - -t
+      - ${_IMAGE}
+      - .
+images: ["${_IMAGE}"]
+substitutions:
+  _FEATURES: ui
+  # E2_HIGHCPU_32 has 32 GB: at about 2.7 GB for the largest rustc, 16 jobs leave room.
+  _CARGO_BUILD_JOBS: "16"
+  _IMAGE: ""
+options:
+  machineType: E2_HIGHCPU_32
+timeout: 3600s

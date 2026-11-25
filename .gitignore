@@ -2,3 +2,7 @@
 /tests/.venv
 .pytest_cache/
 __pycache__/
+/deploy/terraform/.terraform/
+/deploy/terraform/*.tfstate*
+/deploy/terraform/*.tfvars
+/deploy/terraform/.terraform.tfstate.lock.info

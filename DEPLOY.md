@@ -95,15 +95,18 @@ needs `roles/datastore.indexAdmin`.
 gcloud artifacts repositories create lakekeeper --project $PROJECT --location $REGION \
   --repository-format docker
 
-# A release build of Lakekeeper is large: give Cloud Build a big machine and an hour.
+# The console is included; add `,_FEATURES=` to the substitutions to leave it out.
 gcloud builds submit --project $PROJECT --region $REGION \
-  --machine-type e2-highcpu-32 --timeout 3600s --tag $IMAGE .
+  --config deploy/cloudbuild.yaml --substitutions _IMAGE=$IMAGE .
 ```
 
-The `Dockerfile` builds without the console. For the console at `/ui`, build with
-`--build-arg FEATURES=ui`, which Cloud Build's `--tag` cannot pass: use
-`docker build --platform linux/amd64 --build-arg FEATURES=ui -t $IMAGE . && docker push $IMAGE`
-instead, after `gcloud auth configure-docker $REGION-docker.pkg.dev`.
+`deploy/cloudbuild.yaml` builds on an `E2_HIGHCPU_32` machine with 16 parallel jobs. The build
+needs memory for its largest rustc process (about 2.7 GB) and for the console's `npm ci`
+(about 3 GB, capped through `NODE_OPTIONS`), which overlaps the first crates. The `Dockerfile`
+defaults to 2 jobs, which keeps a local build near 4 GB; pass `--build-arg CARGO_BUILD_JOBS=N`
+to go faster on a larger machine. For a local build of the Cloud Run image:
+`docker build --platform linux/amd64 --build-arg FEATURES=ui -t $IMAGE . && docker push $IMAGE`,
+after `gcloud auth configure-docker $REGION-docker.pkg.dev`.
 
 ## 5. Deploy
 
