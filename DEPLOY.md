@@ -107,7 +107,9 @@ needs memory for its largest rustc process (about 2.7 GB) and for the console's 
 defaults to 2 jobs, which keeps a local build near 4 GB; pass `--build-arg CARGO_BUILD_JOBS=N`
 to go faster on a larger machine. For a local build of the Cloud Run image:
 `docker build --platform linux/amd64 --build-arg FEATURES=ui -t $IMAGE . && docker push $IMAGE`,
-after `gcloud auth configure-docker $REGION-docker.pkg.dev`.
+after `gcloud auth configure-docker $REGION-docker.pkg.dev`. The `Dockerfile` needs BuildKit
+(the buildx plugin). On an arm64 machine the builder still runs natively and cross-compiles
+for amd64, so nothing runs under emulation.
 
 ## 5. Deploy
 

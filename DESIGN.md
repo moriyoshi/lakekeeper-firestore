@@ -226,8 +226,7 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
    (it declares no bootstrap grants), only their own management endpoints, which answer
    with an error naming the method.
 6. **Deployment.** Container image for Cloud Run, Firestore indexes, and IAM.
-   - **Drafted (2026-11-25):** `Dockerfile` and DEPLOY.md. The image builds with plain
-     `docker build` (no BuildKit-only syntax, as the local Docker has no buildx), on
+   - **Drafted (2026-11-25):** `Dockerfile` and DEPLOY.md. The image builds on
      `distroless/cc`, since the Azure SDK's `native-tls` links libssl dynamically; the
      console's build needs Node.js in the builder. The service runs with CPU always
      allocated and at least one instance, for the task queues and the change-log listener,
@@ -245,6 +244,14 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
        heap is too small. On `E2_HIGHCPU_8` (8 GB), 4 jobs built in 19 minutes. A local
        build on a VM with 3 GB free ran out of memory at 2 jobs, in the main crate, and
        built with 1 job; `tests/image` passed against that image (270 MB).
+     - **Cross-compiled (2026-11-26):** the `Dockerfile` builds on `$BUILDPLATFORM` and
+       cross-compiles for the target with Debian's cross GCC and multiarch `libssl-dev`, so
+       an arm64 machine builds the amd64 image without emulation: 33 minutes with the console
+       and 1 job, and `tests/image` passed against it under QEMU (262 MB). It needs BuildKit:
+       the legacy builder, on Docker's containerd image store, exports for the daemon's own
+       platform and failed for any other, even a COPY-only build. Under BuildKit,
+       `COPY --from=<image>` takes the target platform's image, so Node comes from a stage
+       pinned to the build platform. The native path (Cloud Build) is not rebuilt since.
      - The new project's Cloud Build quota refused `E2_HIGHCPU_32`.
      - Terraform with a one-hour access token outlived it on the index builds; indexes left
        building were imported afterwards.

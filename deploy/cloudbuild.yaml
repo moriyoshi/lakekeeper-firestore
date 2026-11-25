@@ -7,6 +7,8 @@
 # A release build of Lakekeeper is large: the machine type and timeout below allow for it.
 steps:
   - name: gcr.io/cloud-builders/docker
+    # The Dockerfile needs BuildKit.
+    env: ["DOCKER_BUILDKIT=1"]
     args:
       - build
       - --build-arg=FEATURES=${_FEATURES}

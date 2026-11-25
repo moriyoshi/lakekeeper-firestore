@@ -27,7 +27,8 @@ uv run --project tests pytest tests/e2e
 # Upstream Lakekeeper's pyiceberg REST suite (Docker, uv, `cargo install winterbaume-server`):
 uv run --project tests python -m pytest -p tests.upstream.plugin
 
-# Smoke test of a built image against the Firestore emulator:
+# Smoke test of a built image against the Firestore emulator (BuildKit; add
+# `--platform linux/amd64` on an arm64 machine for Cloud Run's platform, cross-compiled):
 docker build --build-arg FEATURES=ui -t lakekeeper-firestore:dev .
 IMAGE=lakekeeper-firestore:dev uv run --project tests pytest tests/image
 ```
