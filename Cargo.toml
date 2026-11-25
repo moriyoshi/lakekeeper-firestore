@@ -1,0 +1,57 @@
+[package]
+name = "lakekeeper-firestore"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Lakekeeper Iceberg REST catalog served from a Firestore-backed catalog store"
+publish = false
+
+[[bin]]
+name = "lakekeeper-firestore"
+path = "src/main.rs"
+
+[features]
+default = []
+# The Lakekeeper web console, as in upstream `lakekeeper-bin`.
+ui = ["dep:lakekeeper-console"]
+
+[dependencies]
+# Lakekeeper is not on crates.io; pin a release tag and bump deliberately (the
+# CatalogStore trait is internal API and changes between releases).
+lakekeeper = { git = "https://github.com/lakekeeper/lakekeeper", tag = "v0.15.1", features = [
+    "s3-signer",
+    "router",
+] }
+# The storage client trait, to read metadata files the way the core does; same tag as above.
+lakekeeper-io = { git = "https://github.com/lakekeeper/lakekeeper", tag = "v0.15.1", features = [
+    "storage-gcs",
+] }
+# Same rev as upstream `lakekeeper-bin` at v0.15.1.
+lakekeeper-console = { git = "https://github.com/lakekeeper/console", rev = "v0.31.0", optional = true }
+anyhow = "1"
+async-trait = "0.1.89"
+chrono = "0.4"
+clap = { version = "4.5", features = ["derive"] }
+figment = { version = "0.10", features = ["env"] }
+# Exact: the raw gRPC client types it re-exports are outside its semver contract.
+firestore = "=0.67.0"
+flate2 = "1"
+serde_json = "1"
+reqwest = { version = "0.12.28", default-features = false, features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+uuid = { version = "1.6", features = ["serde", "v4", "v5", "v7"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json", "valuable"] }
+
+[dev-dependencies]
+figment = { version = "0.10", features = ["env", "test"] }
+
+# v0.15.1 plus the GCS emulator support the e2e test and the console on emulators need
+# (LAKEKEEPER__GCS_EMULATOR_ENDPOINT), from branch `gcs-emulator-0.15.1` of the fork;
+# Cargo.lock pins its commit (`cargo update -p lakekeeper -p lakekeeper-io` moves it). To work
+# on the fork, point these at a checkout with `path`; remove the section to build against plain
+# upstream.
+[patch."https://github.com/lakekeeper/lakekeeper"]
+lakekeeper = { git = "https://github.com/moriyoshi/lakekeeper", branch = "gcs-emulator-0.15.1" }
+lakekeeper-io = { git = "https://github.com/moriyoshi/lakekeeper", branch = "gcs-emulator-0.15.1" }

@@ -1,0 +1,532 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "namespaces",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "parent_key",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tabulars",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tabulars",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "namespace_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tabulars",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "typ",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tabulars",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "namespace_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "typ",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tabulars",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "location_prefixes",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "queue_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scheduled_for",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "task_schedules",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "enabled",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "next_run_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp_ms",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "operation",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp_ms",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "table_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp_ms",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "table_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "operation",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp_ms",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "table_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sequence_number",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_partition_specs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "default",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "transforms",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_partition_specs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "transforms",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_partition_specs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "default",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "transforms",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_partition_specs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "table_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "source_field_ids",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_partition_specs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "table_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "default",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "source_field_ids",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_files_size",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_files_size",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_files_size",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_records",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_records",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_records",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_data_files",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_data_files",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_data_files",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_delete_files",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_delete_files",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "warehouse_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "current_summary.total_delete_files",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "idx_snapshots",
+      "fieldPath": "summary_other",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_snapshots",
+      "fieldPath": "manifest_list",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_snapshots",
+      "fieldPath": "statistics",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_snapshots",
+      "fieldPath": "partition_statistics",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_fields",
+      "fieldPath": "name",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_fields",
+      "fieldPath": "path",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_partition_specs",
+      "fieldPath": "names",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "fieldPath": "location",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_tables",
+      "fieldPath": "refs",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_views",
+      "fieldPath": "location",
+      "indexes": []
+    }
+  ]
+}

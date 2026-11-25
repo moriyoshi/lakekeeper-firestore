@@ -1,0 +1,13 @@
+{
+  "warehouse-name": "errtraq",
+  "storage-profile": {
+    "type": "gcs",
+    "bucket": "lkfs-test",
+    "key-prefix": "warehouse",
+    "sts-enabled": false
+  },
+  "storage-credential": {
+    "type": "gcs",
+    "credential-type": "gcp-system-identity"
+  }
+}

@@ -1,0 +1,6 @@
+# Copied from upstream Lakekeeper's .cargo/config.toml (v0.15.1). Cargo config does not reach
+# dependents, and Lakekeeper's crates use `tracing::field::valuable` and tokio unstable APIs,
+# so every crate that depends on them must compile with these cfgs.
+[build]
+rustflags = ["--cfg", "tracing_unstable", "--cfg", "tokio_unstable"]
+rustdocflags = ["--cfg", "tracing_unstable", "--cfg", "tokio_unstable"]
