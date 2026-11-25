@@ -78,3 +78,9 @@ variable "protect_data" {
   type        = bool
   default     = true
 }
+
+variable "console_url" {
+  description = "Where the console sends its API calls, such as http://localhost:8181 for `gcloud run services proxy`; unset, the service's own URL."
+  type        = string
+  default     = null
+}

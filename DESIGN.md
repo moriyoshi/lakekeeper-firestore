@@ -248,8 +248,12 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
      - The new project's Cloud Build quota refused `E2_HIGHCPU_32`.
      - Terraform with a one-hour access token outlived it on the index builds; indexes left
        building were imported afterwards.
-     - Not checked: `gcloud run services proxy` (it needs a CLI component), and a keyed
-       credential refused by the store on a real project.
+     - Not checked: a keyed credential refused by the store on a real project, and
+       `gcloud run services proxy` (it needs a CLI component). From the source of the proxy
+       (`GoogleCloudPlatform/cloud-run-proxy`): it forwards the service's own `Host` and no
+       `X-Forwarded-Host`, so URLs the server builds from the request name the service. The
+       console embeds one (`determine_base_uri`, unless `LAKEKEEPER__UI__LAKEKEEPER_URL` is set),
+       and so does a table load's GCS refresh endpoint; DEPLOY.md gives the setting.
    - **Several instances (2026-11-25, on the emulator):** `tests/e2e/test_instances.py` runs
      two more servers on the e2e database, with hour-long cache entries: one evicts a renamed
      or dropped warehouse within seconds, from the change log, while one with invalidation off

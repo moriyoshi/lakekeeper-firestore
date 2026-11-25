@@ -197,6 +197,13 @@ resource "google_cloud_run_v2_service" "lakekeeper" {
         name  = "LAKEKEEPER__ENABLE_GCP_SYSTEM_CREDENTIALS"
         value = "true"
       }
+      dynamic "env" {
+        for_each = var.console_url == null ? [] : [var.console_url]
+        content {
+          name  = "LAKEKEEPER__UI__LAKEKEEPER_URL"
+          value = env.value
+        }
+      }
 
       startup_probe {
         http_get {

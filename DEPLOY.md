@@ -187,8 +187,19 @@ gcloud run services proxy lakekeeper --project $PROJECT --region $REGION --port 
 # Catalog: http://localhost:8181/catalog   Console (ui builds): http://localhost:8181/ui
 ```
 
-The proxy needs the `cloud-run-proxy` component of the Google Cloud CLI, and is not checked
-yet: whether clients behind it are handed `localhost` URLs depends on the headers it forwards.
+The proxy needs the `cloud-run-proxy` component of the Google Cloud CLI. It sends each
+request on with the service's own `Host` and no `X-Forwarded-Host`, so the server builds the
+URLs it hands out for the service, not for the proxy (read from the proxy's and Lakekeeper's
+source; not run):
+
+- The console takes its API address from the page the server serves, so behind the proxy it
+  would call the service directly, without a token, and fail. Set
+  `LAKEKEEPER__UI__LAKEKEEPER_URL=http://localhost:8181` on the service for the port the proxy
+  listens on (with Terraform, `console_url`). It changes only the console's address, and a
+  browser cannot reach the service directly anyway.
+- pyiceberg talks to the `uri` it was given, so catalog calls go through the proxy. The
+  `gcs.oauth2.refresh-credentials-endpoint` a table load hands out names the service, so a
+  client that refreshes its GCS token there does so without the proxy's token.
 
 ## With Terraform
 
@@ -243,7 +254,7 @@ On a sandbox project (2026-11-25), with the Terraform stack, then destroyed:
   10 seconds; the task reported `SUCCESS`.
 - The service logged no errors but those provoked on purpose, and no missing-index errors.
 
-Not checked: `gcloud run services proxy` (above); a key refused by the secret store, which
+Not checked: `gcloud run services proxy` (above, only read from the source); a key refused by the secret store, which
 storage validation reaches first with a made-up key; several instances at once on Cloud Run
 (on the emulator, `tests/e2e/test_instances.py` checks that their caches follow each other's
 changes); a service account's ID token (`--audiences`); and the Firebase CLI route of step 2, which the Terraform
