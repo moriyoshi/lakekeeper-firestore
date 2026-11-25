@@ -19,10 +19,13 @@ FIRESTORE_EMULATOR_HOST=localhost:8080 \
 LAKEKEEPER__FIRESTORE__PROJECT_ID=demo-lakekeeper \
   ./target/debug/lakekeeper-firestore serve
 
-# End-to-end check on GCS (Docker, curl, uv; host port 80 must be free for the
+# End-to-end check on GCS (Docker, uv; host port 80 must be free for the
 # storage-testbench emulator). Builds against the patched Lakekeeper from branch
 # gcs-emulator-0.15.1 of github.com/moriyoshi/lakekeeper (see [patch] in Cargo.toml):
-tests/e2e/run.sh
+uv run --project tests pytest tests/e2e
+
+# Upstream Lakekeeper's pyiceberg REST suite (Docker, uv, `cargo install winterbaume-server`):
+uv run --project tests python -m pytest -p tests.upstream.plugin
 ```
 
 Configuration is upstream Lakekeeper's `LAKEKEEPER__*` settings, plus:
@@ -46,7 +49,7 @@ and client access through Cloud Run IAM.
 ## Trying the console on emulators
 
 Build with `--features ui` to serve the Lakekeeper console at `/ui`. With the Firestore and
-Cloud Storage emulators (see `tests/e2e/run.sh` for the containers and settings), its query
+Cloud Storage emulators (see `tests/e2e/conftest.py` for the containers and settings), its query
 engine (LoQE) also works on GCS warehouses whose storage profile sets `"sts-enabled": true`:
 the server vends a placeholder token and proxies the browser's storage requests to the
 emulator under `/gcs-emulator`. This needs fork commit `227554f2` (see DESIGN.md, "Object

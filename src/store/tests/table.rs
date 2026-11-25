@@ -543,3 +543,34 @@ async fn a_refs_load_returns_the_referenced_snapshots_only() {
     assert_eq!(refs.current_snapshot_id(), Some(ids[4]));
     assert_eq!(refs.history().len(), metadata.history().len());
 }
+
+#[tokio::test]
+async fn a_lookup_by_uuid_under_every_type_finds_the_table_once() {
+    // The S3 signer resolves `tabular-id/{uuid}` by asking for the UUID as a table, a view
+    // and a generic table at once, and refuses more than one answer.
+    let Some(db) = db().await else { return };
+    let ns = namespace(&db).await;
+    let metadata = small("s3://b/signed");
+    create(&db, ns, "signed", Some("s3://b/m/signed.json"), &metadata)
+        .await
+        .unwrap();
+    let uuid = metadata.uuid();
+    let table_id = TableId::from(uuid);
+    let candidates = [
+        lakekeeper::service::TabularId::Table(table_id),
+        lakekeeper::service::TabularId::View(lakekeeper::service::ViewId::from(uuid)),
+        lakekeeper::service::TabularId::GenericTable(lakekeeper::service::GenericTableId::from(
+            uuid,
+        )),
+    ];
+    let found = tabular::get_by_id(
+        ns.0,
+        &candidates,
+        lakekeeper::service::TabularListFlags::active(),
+        &mut Txn::latest(db.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].tabular_id(), candidates[0]);
+}

@@ -1,0 +1,29 @@
+# The Python test environment of tests/e2e and tests/upstream:
+#
+#   uv run --project tests pytest tests/e2e
+#   uv run --project tests python -m pytest -p tests.upstream.plugin
+#
+# The versions follow upstream Lakekeeper's tox environment `pyiceberg` (tests/python/tox.ini).
+[project]
+name = "lakekeeper-firestore-tests"
+version = "0"
+requires-python = ">=3.11"
+dependencies = [
+    "pytest>7,<8.4",
+    "pyiceberg[gcsfs,s3fs,pyarrow]==0.10.0",
+    "pandas",
+    "requests",
+    "boto3",
+    "botocore==1.42.42",
+    "s3fs==2026.1.0",
+    "pydantic==2.11.7",
+    "pydantic-settings",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+addopts = "-rs"
+# For `import support`.
+pythonpath = ["."]

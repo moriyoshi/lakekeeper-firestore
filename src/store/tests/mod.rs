@@ -1,5 +1,5 @@
 //! Tests on the Firestore emulator. They are skipped unless `FIRESTORE_EMULATOR_HOST` is set,
-//! for example by `tests/e2e/run.sh` or by hand:
+//! for example by `tests/e2e` or by hand:
 //!
 //! ```sh
 //! FIRESTORE_EMULATOR_HOST=localhost:28080 cargo test

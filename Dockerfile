@@ -6,7 +6,7 @@
 #
 # Cloud Run runs linux/amd64: on another host, add `--platform linux/amd64`.
 
-FROM rust:1.95-slim-trixie AS builder
+FROM rust:1.99.1-slim-trixie AS builder
 
 # Make crate downloads resilient to transient registry blips, as upstream does.
 ENV CARGO_HTTP_MULTIPLEXING=false

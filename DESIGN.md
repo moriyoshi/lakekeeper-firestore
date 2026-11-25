@@ -88,11 +88,12 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
    - **Tabulars:** lookup by ident, ID or location, listing, protection, soft and hard delete.
    - **Tables:** create, load, commit.
 
-   `tests/e2e/run.sh` runs the whole path on GCS. It starts the Firestore emulator and Google's
-   storage-testbench in Docker, runs the server with the patched Lakekeeper (see "Object storage
-   for tests"), and uses pyiceberg 0.10 to:
+   `tests/e2e` (pytest: `uv run --project tests pytest tests/e2e`) runs the whole path on GCS.
+   Its fixtures start the Firestore emulator and Google's storage-testbench in Docker and run
+   the server with the patched Lakekeeper (see "Object storage for tests"); its tests use
+   pyiceberg 0.10 to:
    - create a namespace and a table, append twice, delete a row, and read the rows back;
-   - re-read in a new process.
+   - re-read with a new client.
 
    An earlier version ran against S3 (moto, then winterbaume) with DuckDB 1.5.4. It also wrote
    a format v3 table whose delete became a deletion vector (a puffin file). DuckDB cannot write
@@ -107,7 +108,7 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
 4. **Tests.** There is no backend-independent Rust suite upstream (see "Upstream test suites"
    below).
    - **Rust tests on the emulator (2026-11-24)** live in `src/store/tests/`. They are skipped
-     unless `FIRESTORE_EMULATOR_HOST` is set; `tests/e2e/run.sh` runs them first. They cover:
+     unless `FIRESTORE_EMULATOR_HOST` is set; `tests/e2e` runs them first. They cover:
      - overlay reads, and queries merged with pending writes (limit, cursor, array-contains);
      - `create` preconditions, and a create deleted again in the same transaction;
      - concurrent read-modify-write, and the locks of a dropped transaction;
@@ -130,8 +131,19 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
      `src/store/tests/soft_delete.rs` covers soft delete, undrop, and the soft-deletion task
      on listings and namespace drop. Not covered yet: the rest of namespace drop, and listing
      pagination.
-   - **Still planned:** run upstream's pyiceberg REST suite (`tests/python`) against this
-     server through a compose overlay.
+   - **Upstream's pyiceberg REST suite (2026-11-25):** `tests/upstream/plugin.py`, a pytest
+     plugin, runs `tests/python/tests/test_pyiceberg.py` of the pinned Lakekeeper against this
+     server (`uv run --project tests python -m pytest -p tests.upstream.plugin`), instead of a
+     compose overlay. It starts the Firestore emulator, winterbaume-server for S3 and STS in
+     place of MinIO, and the server with in-memory secrets (the suite's credentials are keys),
+     and stands in for Keycloak with a token endpoint handing out a placeholder, as the server
+     runs without authentication. With remote signing: 23 passed, and 1 skipped (OpenFGA only).
+     It found a bug: the S3 signer resolves `tabular-id/{uuid}` by asking for the UUID as a
+     table, a view and a generic table at once, and the store read the shared document once
+     per candidate, so the signer got three answers and failed every signed write with 500.
+     The store now reads each document once, as Postgres returns a row once. With vended
+     credentials every test fails at warehouse creation: winterbaume's AssumeRole wants a
+     `RoleArn`, as AWS does, and the suite's MinIO-flavoured profiles send none.
 5. **Remaining methods.** Namespace move, roles and grants, statistics and the cache change
    log. Add the secret store on Google Secret Manager. Done (2026-11-24):
    - the task queue (see "Task queue");
@@ -489,7 +501,7 @@ locations) out of every index.
    (with view entities). Tested by `tests/projection.rs` (replacements, without the
    emulator) and `tests/view_projection.rs` (on the emulator, including the task and the CLI;
    checked to fail when replace or rename skips the projection).
-6. **Done (2026-11-25),** `search` mode of `tests/e2e/check.py`: pyiceberg appends to a new
+6. **Done (2026-11-25),** `test_search` of `tests/e2e/test_catalog.py`: pyiceberg appends to a new
    table, adds and renames a column, adds a `bucket[4]` partition field, creates a branch on an
    older snapshot and sets a property; a REST commit expires the first snapshot (pyiceberg 0.10
    has no expiry). The CLI's `history`, `snapshots --where`, `columns`, `schema-changes`,

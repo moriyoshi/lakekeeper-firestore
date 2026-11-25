@@ -456,7 +456,11 @@ pub(super) async fn get_by_id(
     if warehouse::read_active(txn, warehouse_id).await?.is_none() {
         return Ok(Vec::new());
     }
-    let names: Vec<String> = ids.iter().map(|id| doc_name(txn, **id)).collect();
+    // A table, a view and a generic table with one UUID share a document (as the S3
+    // signer's type-agnostic lookup asks for): read it once, as Postgres returns a row once.
+    let mut names: Vec<String> = ids.iter().map(|id| doc_name(txn, **id)).collect();
+    names.sort_unstable();
+    names.dedup();
     let mut docs = Vec::new();
     for d in txn.get_many(&names).await?.into_iter().flatten() {
         let t: TabularDoc = from_doc(&d)?;
