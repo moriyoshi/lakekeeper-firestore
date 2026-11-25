@@ -251,7 +251,8 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
        the legacy builder, on Docker's containerd image store, exports for the daemon's own
        platform and failed for any other, even a COPY-only build. Under BuildKit,
        `COPY --from=<image>` takes the target platform's image, so Node comes from a stage
-       pinned to the build platform. The native path (Cloud Build) is not rebuilt since.
+       pinned to the build platform. The native path, which Cloud Build takes, built arm64 in
+       28 minutes and passed `tests/image` too (270 MB); Cloud Build itself is not rerun.
      - The new project's Cloud Build quota refused `E2_HIGHCPU_32`.
      - Terraform with a one-hour access token outlived it on the index builds; indexes left
        building were imported afterwards.
