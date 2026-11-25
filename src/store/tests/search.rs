@@ -335,8 +335,8 @@ fn checked_in_indexes_are_current() {
     ))
     .expect("firestore.indexes.json; regenerate with `lakekeeper-firestore search indexes`");
     let file: Value = serde_json::from_str(&file).unwrap();
-    assert_eq!(file, firestore_indexes(""));
-    let prefixed = firestore_indexes("p_");
+    assert_eq!(file, firestore_indexes("", false));
+    let prefixed = firestore_indexes("p_", false);
     assert!(
         prefixed["indexes"]
             .as_array()
@@ -344,4 +344,14 @@ fn checked_in_indexes_are_current() {
             .iter()
             .all(|i| i["collectionGroup"].as_str().unwrap().starts_with("p_"))
     );
+    // The snapshot summary is kept out of indexes unless asked for.
+    let summary_exempt = |indexes: &Value| {
+        indexes["fieldOverrides"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|o| o["collectionGroup"] == "idx_snapshots" && o["fieldPath"] == "summary")
+    };
+    assert!(summary_exempt(&file));
+    assert!(!summary_exempt(&firestore_indexes("", true)));
 }

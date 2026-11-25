@@ -21,6 +21,7 @@
 //! | `tag_definitions` | tag definition ID | [`TagDefinitionDoc`] |
 //! | `tag_definition_names` | `{project}:{folded name}` | [`NameMarker`] |
 //! | `tags` | `{target}:{definition}:{source}` | [`TagDoc`]: a definition attached to a target |
+//! | `secrets` | secret ID | a storage credential without secret material ([`super::secrets`]) |
 //! | `cache_changes` | random (`UUIDv7`) | [`CacheChangeDoc`]: changed cache keys of one write |
 //! | `idempotency_records` | `{warehouse}:{key}` | [`IdempotencyDoc`] |
 //! | `idx_tables` | table ID | [`IdxTable`](super::projection::IdxTable) |
@@ -64,6 +65,7 @@ pub(crate) const TASK_CONFIGS: &str = "task_configs";
 pub(crate) const TASK_SCHEDULES: &str = "task_schedules";
 pub(crate) const USERS: &str = "users";
 pub(crate) const CACHE_CHANGES: &str = "cache_changes";
+pub(crate) const SECRETS: &str = "secrets";
 pub(crate) const TAG_DEFINITIONS: &str = "tag_definitions";
 pub(crate) const TAG_DEFINITION_NAMES: &str = "tag_definition_names";
 pub(crate) const TAGS: &str = "tags";

@@ -23,8 +23,8 @@ pub(crate) struct DebugConfig {
     /// Include file names and line numbers in log output.
     /// This is useful for debugging but can be disabled for cleaner logs in production.
     pub(crate) extended_logs: bool,
-    /// Keep storage secrets in process memory, where a restart loses them. For local testing
-    /// only, until a real secret store exists.
+    /// Keep storage secrets in process memory, where a restart loses them, instead of
+    /// Firestore, which keeps only keyless credentials. For local testing with keys only.
     pub(crate) in_memory_secrets: bool,
 }
 

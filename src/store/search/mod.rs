@@ -150,7 +150,13 @@ pub(crate) enum Command {
     },
     /// Print `firestore.indexes.json` for the configured collection prefix: the composite
     /// indexes the catalog and these searches need, and the fields kept out of indexes.
-    Indexes,
+    Indexes {
+        /// Keep the snapshot summary numbers (`idx_snapshots.summary`) indexed, for queries of
+        /// your own on them. No search here needs it: `--where` filters in memory. Off, a
+        /// snapshot document has about a third of the index entries.
+        #[arg(long)]
+        index_snapshot_summary: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -247,7 +253,10 @@ impl Output {
 }
 
 pub(crate) async fn run(args: SearchArgs) -> anyhow::Result<()> {
-    if let Command::Indexes = args.command {
+    if let Command::Indexes {
+        index_snapshot_summary,
+    } = args.command
+    {
         let prefix = crate::CONFIG_BIN
             .firestore
             .collection_prefix
@@ -255,7 +264,7 @@ pub(crate) async fn run(args: SearchArgs) -> anyhow::Result<()> {
             .unwrap_or_default();
         println!(
             "{}",
-            serde_json::to_string_pretty(&firestore_indexes(&prefix))?
+            serde_json::to_string_pretty(&firestore_indexes(&prefix, index_snapshot_summary))?
         );
         return Ok(());
     }
@@ -459,7 +468,7 @@ pub(crate) async fn execute(db: &Db, command: Command) -> anyhow::Result<Output>
             }
             Ok(out)
         }
-        Command::Indexes => anyhow::bail!("`indexes` needs no database"),
+        Command::Indexes { .. } => anyhow::bail!("`indexes` needs no database"),
     }
 }
 

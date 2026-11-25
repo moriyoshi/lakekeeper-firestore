@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 use crate::store::docs::{
     CACHE_CHANGES, IDEMPOTENCY_RECORDS, IDX_FIELDS, IDX_PARTITION_SPECS, IDX_SNAPSHOTS, IDX_TABLES,
-    IDX_VIEWS, NAMESPACES, TABULARS, TAG_DEFINITIONS, TAGS, TASK_SCHEDULES, TASKS, USERS,
+    IDX_VIEWS, NAMESPACES, SECRETS, TABULARS, TAG_DEFINITIONS, TAGS, TASK_SCHEDULES, TASKS, USERS,
 };
 
 #[derive(Debug, Clone)]
@@ -141,7 +141,8 @@ fn indexes() -> Vec<(&'static str, Vec<F>)> {
 }
 
 /// Fields that no query filters or orders by, kept out of every index to save index writes.
-const EXEMPT: [(&str, &str); 13] = [
+const EXEMPT: [(&str, &str); 14] = [
+    (SECRETS, "secret"),
     (CACHE_CHANGES, "domain"),
     (CACHE_CHANGES, "keys"),
     (TABULARS, "generic"),
@@ -157,8 +158,9 @@ const EXEMPT: [(&str, &str); 13] = [
     (IDX_VIEWS, "location"),
 ];
 
-/// `firestore.indexes.json` for collections named with `prefix`.
-pub(crate) fn firestore_indexes(prefix: &str) -> Value {
+/// `firestore.indexes.json` for collections named with `prefix`. The snapshot summary
+/// numbers are kept out of indexes unless `index_snapshot_summary`.
+pub(crate) fn firestore_indexes(prefix: &str, index_snapshot_summary: bool) -> Value {
     let indexes: Vec<Value> = indexes()
         .into_iter()
         .map(|(collection, fields)| {
@@ -177,8 +179,10 @@ pub(crate) fn firestore_indexes(prefix: &str) -> Value {
             })
         })
         .collect();
+    let summary = (!index_snapshot_summary).then_some((IDX_SNAPSHOTS, "summary"));
     let overrides: Vec<Value> = EXEMPT
         .into_iter()
+        .chain(summary)
         .map(|(collection, path)| {
             json!({
                 "collectionGroup": format!("{prefix}{collection}"),

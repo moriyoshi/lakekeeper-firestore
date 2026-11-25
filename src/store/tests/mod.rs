@@ -513,6 +513,7 @@ mod projection_store;
 mod rename;
 mod search;
 mod search_tabular;
+mod secrets;
 mod soft_delete;
 mod table;
 mod tag;

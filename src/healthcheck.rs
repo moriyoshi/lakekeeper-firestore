@@ -68,7 +68,7 @@ pub(crate) fn normalize_checks(
 pub(crate) async fn db_health_check() -> anyhow::Result<()> {
     // The health check reads no metadata files.
     let files =
-        crate::store::StorageFiles::new(crate::secrets::PlaceholderSecretStore::from_config());
+        crate::store::StorageFiles::new(crate::secrets::CatalogSecretStore::from_config().await?);
     let db = FirestoreState::from_config(std::sync::Arc::new(files))
         .await
         .with_context(|| "Connecting to Firestore failed.")?;

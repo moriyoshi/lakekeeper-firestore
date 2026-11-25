@@ -483,3 +483,63 @@ async fn table_names_are_unique_and_staged_tables_are_replaced() {
         "{err:?}"
     );
 }
+
+#[tokio::test]
+async fn a_refs_load_returns_the_referenced_snapshots_only() {
+    use lakekeeper::{
+        api::iceberg::v1::tables::SnapshotsQuery,
+        iceberg::spec::{MAIN_BRANCH, SnapshotReference, SnapshotRetention},
+    };
+
+    let Some(db) = db().await else { return };
+    let ns = namespace(&db).await;
+    let appended = super::metadata_size::appended(5);
+    let mut ids: Vec<i64> = appended.snapshots().map(|s| s.snapshot_id()).collect();
+    ids.sort_unstable();
+    // A tag on the oldest snapshot, besides `main` on the newest.
+    let metadata = TableMetadataBuilder::new_from_metadata(appended, None)
+        .set_ref(
+            "first",
+            SnapshotReference {
+                snapshot_id: ids[0],
+                retention: SnapshotRetention::Tag {
+                    max_ref_age_ms: None,
+                },
+            },
+        )
+        .unwrap()
+        .build()
+        .unwrap()
+        .metadata;
+    let id = metadata.uuid();
+    create(&db, ns, "refs", Some("gs://bucket/m/refs.json"), &metadata)
+        .await
+        .unwrap();
+
+    let load = |snapshots| {
+        let db = db.clone();
+        async move {
+            table::load(
+                ns.0,
+                [TableId::from(id)],
+                false,
+                &LoadTableFilters { snapshots },
+                &mut Txn::latest(db),
+                &*files(),
+            )
+            .await
+            .unwrap()
+            .pop()
+            .unwrap()
+            .table_metadata
+        }
+    };
+    assert_eq!(load(SnapshotsQuery::All).await.snapshots().count(), 5);
+    let refs = load(SnapshotsQuery::Refs).await;
+    let mut kept: Vec<i64> = refs.snapshots().map(|s| s.snapshot_id()).collect();
+    kept.sort_unstable();
+    assert_eq!(kept, [ids[0], ids[4]]);
+    assert_eq!(refs.refs()[MAIN_BRANCH].snapshot_id, ids[4]);
+    assert_eq!(refs.current_snapshot_id(), Some(ids[4]));
+    assert_eq!(refs.history().len(), metadata.history().len());
+}

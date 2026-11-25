@@ -22,12 +22,12 @@ use lakekeeper::{
 #[cfg(feature = "ui")]
 use crate::ui;
 use crate::{
-    secrets::PlaceholderSecretStore,
+    secrets::CatalogSecretStore,
     store::{FirestoreBackend, FirestoreState, StorageFiles, register_projection_queue},
 };
 
 pub(crate) async fn serve_default(bind_addr: std::net::SocketAddr) -> anyhow::Result<()> {
-    let secrets = PlaceholderSecretStore::from_config();
+    let secrets = CatalogSecretStore::from_config().await?;
     let catalog = FirestoreState::from_config(Arc::new(StorageFiles::new(secrets.clone()))).await?;
     let server_id = <FirestoreBackend as CatalogStore>::get_server_info(catalog.clone())
         .await?

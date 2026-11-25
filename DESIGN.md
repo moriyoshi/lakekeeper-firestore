@@ -73,7 +73,7 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
      event backend (no NATS or Kafka).
    - `src/healthcheck.rs` and `src/ui.rs` (behind the `ui` feature, which pulls `lakekeeper-console`
      v0.31.0 as upstream does).
-   - `src/secrets.rs`: a secret store that fails every call.
+   - `src/secrets.rs`: a secret store that failed every call (replaced in step 5).
    - `src/store/catalog.rs`: the `CatalogStore` impl. Its stubs were generated from the trait at
      v0.15.1, and each one returns a `CatalogBackendError` naming the method. Two exceptions:
      `record_cache_changes_impl` succeeded and wrote nothing, and `cache_change_log` never
@@ -102,11 +102,8 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
    - **REST `DELETE` of a table returned 503** until the task queue existed (2026-11-24, see
      "Task queue" below). The e2e test now purges a table and waits for the purge worker to
      delete its files.
-   - **Not done yet:** the snapshot filter of `loadTable` (every snapshot is returned).
-     Roles and grants are out of scope; the rest of this list was done in step 5.
-   - **Secrets.** Warehouse credentials need a secret store. For testing only,
-     `LAKEKEEPER__DEBUG__IN_MEMORY_SECRETS=true` keeps them in process memory, where a restart
-     loses them.
+   - **Done later:** everything on this list but roles and grants (out of scope), in step 5.
+   - **Secrets.** Warehouse credentials need a secret store; see step 5 for the one built.
 4. **Tests.** There is no backend-independent Rust suite upstream (see "Upstream test suites"
    below).
    - **Rust tests on the emulator (2026-11-24)** live in `src/store/tests/`. They are skipped
@@ -180,6 +177,18 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
    - **Endpoint statistics**: always empty, because no statistics sink is configured; the
      page tokens step through windows as upstream's do.
    - **The cache change log** (see "Cache change log").
+   - **The secret store** (`src/store/secrets.rs`, decided 2026-11-25): creating a
+     warehouse stores its storage credential even when the credential only says "use the
+     server's own identity", so a deployment needs a real store. Credentials are
+     `secrets/{id}` documents, and only those without secret material are kept
+     (`gcp-system-identity`, `aws-system-identity`, `azure-system-identity`): a key or
+     password is refused with 400 `StorageCredentialNotStorable`, as anyone who can read
+     the database could read it. On Cloud Run the service account reaches the buckets.
+     `LAKEKEEPER__DEBUG__IN_MEMORY_SECRETS=true` still keeps any credential in memory, for
+     local testing with keys; the e2e test now uses the Firestore store.
+   - **The `snapshots=refs` load**: only the snapshots a branch or tag points to, filtered
+     from the parsed metadata file (through its JSON form, as its fields are private); the
+     snapshot log stays whole, as upstream's does.
    - **Tags** (`src/store/tag.rs`): definitions in `tag_definitions` (allowed values inside,
      sorted) with a case-insensitive name marker per project, and attachments in `tags`,
      keyed by target, definition and source, so applying a tag again finds it and the same
@@ -204,6 +213,13 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
    (it declares no bootstrap grants), only their own management endpoints, which answer
    with an error naming the method.
 6. **Deployment.** Container image for Cloud Run, Firestore indexes, and IAM.
+   - **Drafted (2026-11-25):** `Dockerfile` and DEPLOY.md. The image builds with plain
+     `docker build` (no BuildKit-only syntax, as the local Docker has no buildx), on
+     `distroless/cc`, since the Azure SDK's `native-tls` links libssl dynamically; the
+     console's build needs Node.js in the builder. The service runs with CPU always
+     allocated and at least one instance, for the task queues and the change-log listener,
+     behind Cloud Run IAM with `LAKEKEEPER__BASE_URI` unset, so URLs follow the request
+     (and `gcloud run services proxy` works). Not verified yet; nothing is deployed.
 
 ## Plan: normalized table metadata (drafted 2026-11-24)
 
@@ -514,6 +530,9 @@ orders by them (`--where` conditions are applied to results). Exempting `idx_sna
 would leave about 6; `idx_tables.current_summary` is ordered by `search largest` (descending
 only) and needs only that.
 
+Decided 2026-11-25: `idx_snapshots.summary` is exempt by default, and
+`search indexes --index-snapshot-summary` keeps it indexed, for queries of one's own.
+
 **Separately**, the pointer mode gets the location-keyed metadata cache and the
 `snapshots=refs` filter applied to the parsed file.
 
@@ -556,6 +575,9 @@ against the emulator for the store methods.
 
 The Java emulator runs from Docker (`gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators`,
 `gcloud emulators firestore start --host-port=0.0.0.0:8080`), so no local Java is needed.
+
+Under lock contention the emulator can abort both of two racing transactions (409), so a
+test of racing claims retries an aborted claim, as the core's workers do on their next poll.
 
 ### Object storage for tests (checked at v0.15.1)
 
@@ -786,8 +808,8 @@ instances can serve one catalog.
 does not see rolled-back ones or the ones before it started.
 
 ## Open questions
-- **Secret store.** Google Secret Manager (step 5)? Or should credentials be avoided altogether,
-  using GCP system identity (`LAKEKEEPER__ENABLE_GCP_SYSTEM_CREDENTIALS`) on Cloud Run?
+- **Secret store.** Settled: keyless credentials in Firestore (step 5). Secret Manager or
+  encrypted documents would be needed only to store keys.
 - Can DuckDB write through the catalog with GCS credentials vended by Lakekeeper? Real GCS is
   needed to find out; the emulator cannot answer it (see "Object storage for tests").
 - What is the upgrade policy? The trait is internal and changes between releases, so each tag bump

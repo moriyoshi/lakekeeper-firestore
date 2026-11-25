@@ -6,8 +6,9 @@ Lakekeeper only for testing on emulators (see `[patch]` in `Cargo.toml`).
 
 Status: early, tested on the emulators only. Projects, warehouses, namespaces (including moves),
 tables, views, generic tables, tags, tasks, users, idempotency keys and the cache change log (for
-several instances) work. A real secret store is not done yet; roles and grants are out of scope,
-as this is meant for a small, self-contained installation behind the allow-all authorizer. See
+several instances) work. Storage credentials must use the server's own identity: keys are refused.
+Roles and grants are out of scope, as this is meant for a small, self-contained installation behind
+the allow-all authorizer. See
 [DESIGN.md](./DESIGN.md) for the approach, the plan and the known gaps.
 
 ```sh
@@ -32,9 +33,15 @@ Configuration is upstream Lakekeeper's `LAKEKEEPER__*` settings, plus:
 | `LAKEKEEPER__FIRESTORE__DATABASE_ID` | Firestore database; default `(default)` |
 | `LAKEKEEPER__FIRESTORE__COLLECTION_PREFIX` | Prefix for every collection, so several catalogs can share a database |
 | `LAKEKEEPER__FIRESTORE__PROJECTION_WORKERS` | Workers of the `metadata_projection` task queue in this process; default 2 |
-| `LAKEKEEPER__DEBUG__IN_MEMORY_SECRETS` | `true` keeps storage credentials in memory (testing only; lost on restart) |
+| `LAKEKEEPER__DEBUG__IN_MEMORY_SECRETS` | `true` keeps storage credentials in memory instead of Firestore, keys included (testing only; lost on restart) |
 
 Only the allow-all authorizer is wired up.
+
+## Deploying
+
+`Dockerfile` builds the server image (`--build-arg FEATURES=ui` adds the console), and
+[DEPLOY.md](./DEPLOY.md) walks through Cloud Run: Firestore and its indexes, IAM, the service
+and client access through Cloud Run IAM.
 
 ## Trying the console on emulators
 

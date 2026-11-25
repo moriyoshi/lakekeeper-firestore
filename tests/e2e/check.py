@@ -210,7 +210,7 @@ def tasks(url: str) -> None:
 
 def extras(url: str) -> None:
     # Idempotency keys, namespace moves, generic tables, tabular search, endpoint
-    # statistics and tags, over REST.
+    # statistics, tags and the `snapshots=refs` load, over REST.
     prefix = request(f"{url}/v1/config?warehouse=errtraq")["defaults"]["prefix"]
     namespaces = f"{url}/v1/{prefix}/namespaces"
     key = {"Idempotency-Key": "01938f4e-7c5a-7d3e-8a1b-2c3d4e5f6a7b"}
@@ -284,7 +284,14 @@ def extras(url: str) -> None:
     )
     names = [d["name"] for d in request(f"{management}/tag-definition")["tag-definitions"]]
     check("check_tag_definitions_listed", sorted(names), ["owner", "pii"])
-    table_id = request(f"{namespaces}/events/tables/batches")["metadata"]["table-uuid"]
+    loaded = request(f"{namespaces}/events/tables/batches")["metadata"]
+    table_id = loaded["table-uuid"]
+    refs = request(f"{namespaces}/events/tables/batches?snapshots=refs")["metadata"]
+    check(
+        "check_refs_snapshots",
+        (len(loaded["snapshots"]) > 1, [s["snapshot-id"] for s in refs["snapshots"]]),
+        (True, [loaded["current-snapshot-id"]]),
+    )
     return_ids = request(f"{namespaces}?returnUuids=true")
     events_id = return_ids["namespace-uuids"][return_ids["namespaces"].index(["events"])]
     table_tags = f"{management}/warehouse/{wh}/table/{table_id}/tags"

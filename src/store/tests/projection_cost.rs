@@ -258,6 +258,7 @@ async fn projection_cost() {
             (
                 IDX_SNAPSHOTS,
                 &[
+                    "summary",
                     "summary_other",
                     "manifest_list",
                     "statistics",

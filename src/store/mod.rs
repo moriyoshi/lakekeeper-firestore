@@ -26,6 +26,7 @@ mod projection;
 mod projection_store;
 mod projection_task;
 pub(crate) mod search;
+mod secrets;
 mod server;
 mod table;
 mod tabular;
@@ -41,6 +42,7 @@ mod warehouse;
 pub(crate) use files::{MetadataFiles, StorageFiles};
 use fs::{Db, Txn};
 pub(crate) use projection_task::register as register_projection_queue;
+pub(crate) use secrets::FirestoreSecrets;
 
 use crate::CONFIG_BIN;
 

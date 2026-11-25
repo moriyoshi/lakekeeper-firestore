@@ -472,12 +472,29 @@ async fn racing_workers_pick_a_task_once() {
     )
     .await;
 
+    // A worker whose claim aborts in lock contention (409) picks again, as the core's workers
+    // do on their next poll; on a busy emulator both claims can abort.
+    let pick_retrying = || async {
+        for _ in 0..5 {
+            match tasks::pick_new_task(
+                request(
+                    &queue_name,
+                    chrono::Duration::hours(1),
+                    TaskResourceDemandRange::default(),
+                ),
+                &state(&db),
+            )
+            .await
+            {
+                Err(e) if e.code == 409 => {}
+                other => return other.unwrap(),
+            }
+        }
+        panic!("every claim aborted");
+    };
     let (a, b) = timeout(
         Duration::from_secs(60),
-        futures_join(
-            Box::pin(pick(&db, &queue_name)),
-            Box::pin(pick(&db, &queue_name)),
-        ),
+        futures_join(Box::pin(pick_retrying()), Box::pin(pick_retrying())),
     )
     .await
     .expect("the picks finish");

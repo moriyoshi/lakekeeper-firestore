@@ -547,6 +547,11 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "secrets",
+      "fieldPath": "secret",
+      "indexes": []
+    },
+    {
       "collectionGroup": "cache_changes",
       "fieldPath": "domain",
       "indexes": []
@@ -609,6 +614,11 @@
     {
       "collectionGroup": "idx_views",
       "fieldPath": "location",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "idx_snapshots",
+      "fieldPath": "summary",
       "indexes": []
     },
     {

@@ -8,7 +8,7 @@ use std::{io::Write as _, str::FromStr};
 
 use lakekeeper::{
     WarehouseId,
-    api::iceberg::v1::tables::LoadTableFilters,
+    api::iceberg::v1::tables::{LoadTableFilters, SnapshotsQuery},
     iceberg::spec::TableMetadata,
     service::{
         CatalogBackendError, CommitTableTransactionError, ConcurrentUpdateError, CreateTableError,
@@ -142,12 +142,36 @@ pub(super) async fn create(
     Ok((ctx.table(&doc)?, staged))
 }
 
+/// `metadata` with only the snapshots a branch or tag points to, as upstream's `snapshots=refs`
+/// load returns it. The snapshot log stays whole, as upstream's does.
+pub(super) fn only_referenced_snapshots(
+    metadata: TableMetadata,
+) -> Result<TableMetadata, CatalogBackendError> {
+    let referenced: std::collections::HashSet<i64> =
+        metadata.refs().values().map(|r| r.snapshot_id).collect();
+    if metadata
+        .snapshots()
+        .all(|s| referenced.contains(&s.snapshot_id()))
+    {
+        return Ok(metadata);
+    }
+    // The metadata's fields are private: filter its JSON form.
+    let mut json = serde_json::to_value(&metadata).map_err(backend_error)?;
+    if let Some(snapshots) = json.get_mut("snapshots").and_then(|s| s.as_array_mut()) {
+        snapshots.retain(|s| {
+            s.get("snapshot-id")
+                .and_then(serde_json::Value::as_i64)
+                .is_some_and(|id| referenced.contains(&id))
+        });
+    }
+    serde_json::from_value(json).map_err(backend_error)
+}
+
 pub(super) async fn load(
     warehouse_id: WarehouseId,
     tables: impl IntoIterator<Item = TableId> + Send,
     include_deleted: bool,
-    // Snapshot filters are not applied: every snapshot is returned.
-    _filters: &LoadTableFilters,
+    filters: &LoadTableFilters,
     txn: &mut Txn,
     files: &dyn MetadataFiles,
 ) -> Result<Vec<LoadTableResponse>, LoadTableError> {
@@ -190,6 +214,10 @@ pub(super) async fn load(
                     t.tabular_id
                 )))
             })?
+        };
+        let table_metadata = match filters.snapshots {
+            SnapshotsQuery::All => table_metadata,
+            SnapshotsQuery::Refs => only_referenced_snapshots(table_metadata)?,
         };
         out.push(LoadTableResponse {
             table_id: TableId::from(t.tabular_id),
