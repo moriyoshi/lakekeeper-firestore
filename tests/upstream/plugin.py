@@ -6,19 +6,24 @@ Without test paths, it runs `tests/python/tests/test_pyiceberg.py` of the Lakeke
 in Cargo.lock, as upstream's `bash run.sh pyiceberg` runs it against Postgres, with the
 settings of upstream's tox environment `pyiceberg`. Before upstream's conftest.py reads its
 settings from the environment, the plugin starts the Firestore emulator (container
-lkfs-firestore-upstream, removed afterwards), winterbaume-server (`cargo install
-winterbaume-server`, an in-memory AWS mock) for S3 and STS in place of upstream's MinIO, and
-this server; it stops them when the session ends.
+lkfs-firestore-upstream, removed afterwards), winterbaume-server 0.2.10 or later (`cargo
+install winterbaume-server`, an in-memory AWS mock) for S3 and STS in place of upstream's
+MinIO, and this server; it stops them when the session ends.
 
 Upstream's suite gets its token from Keycloak, and skips every test without an OpenID
 provider. This server runs without authentication and ignores the token, so the plugin serves
 a stand-in token endpoint that hands out a placeholder. The suite's S3 credentials are keys,
 which the Firestore secret store refuses, so the server keeps secrets in memory here.
-`KEEP_LOG=path` keeps the server's log. `LAKEKEEPER_TEST__S3_STS_MODE=disabled` leaves out the
-vended-credential half of the suite, which winterbaume cannot serve yet (its AssumeRole wants a
-RoleArn, and the suite's MinIO-flavoured storage profiles send none; see
-https://github.com/moriyoshi/winterbaume/issues/77). The ports can be overridden through the environment,
-and differ from the e2e test's, so a running console demo is left alone.
+The suite's MinIO-flavoured storage profiles call AssumeRole without a RoleArn, as MinIO
+allows and AWS does not, so winterbaume runs with its `sts-assume-role-without-role-arn`
+relaxation. The vended-credential half still fails: winterbaume does not apply the session
+policy to S3 requests, so warehouse creation fails Lakekeeper's check that the credentials
+cannot write outside the warehouse (https://github.com/moriyoshi/winterbaume/issues/85); and
+it stores `aws-chunked` uploads (pyarrow's) with their chunk framing, so pyiceberg cannot read
+back what it wrote (https://github.com/moriyoshi/winterbaume/issues/84). `KEEP_LOG=path` keeps the server's
+log. `LAKEKEEPER_TEST__S3_STS_MODE=disabled` (or `enabled`) runs only the remote-signing (or
+vended-credential) half of the suite. The ports can be overridden through the environment, and
+differ from the e2e test's, so a running console demo is left alone.
 """
 
 import json
@@ -104,7 +109,16 @@ def start_services(work: Path) -> dict[str, str]:
 
     s3_log = work / "s3.log"
     s3 = subprocess.Popen(
-        [winterbaume(), "--port", str(S3_PORT), "--region", "us-east-1"],
+        [
+            winterbaume(),
+            "--port",
+            str(S3_PORT),
+            "--region",
+            "us-east-1",
+            # The suite's MinIO-flavoured profiles call AssumeRole without a RoleArn.
+            "--relax",
+            "sts-assume-role-without-role-arn",
+        ],
         stdout=s3_log.open("w"),
         stderr=subprocess.STDOUT,
     )
@@ -151,8 +165,6 @@ def start_services(work: Path) -> dict[str, str]:
         "LAKEKEEPER_TEST__S3_ENDPOINT": f"http://localhost:{S3_PORT}",
         "LAKEKEEPER_TEST__S3_PATH_STYLE_ACCESS": "1",
         "LAKEKEEPER_TEST__S3_REGION": "us-east-1",
-        # `disabled` tests remote signing only: winterbaume's AssumeRole wants a RoleArn,
-        # which the suite's MinIO-flavoured profiles leave out.
         "LAKEKEEPER_TEST__S3_STS_MODE": os.environ.get("LAKEKEEPER_TEST__S3_STS_MODE", "both"),
     }
 

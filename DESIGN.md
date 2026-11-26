@@ -141,10 +141,23 @@ For comparison, the Postgres backend is about 2.5 MB of Rust in 48 files, includ
      It found a bug: the S3 signer resolves `tabular-id/{uuid}` by asking for the UUID as a
      table, a view and a generic table at once, and the store read the shared document once
      per candidate, so the signer got three answers and failed every signed write with 500.
-     The store now reads each document once, as Postgres returns a row once. With vended
-     credentials every test fails at warehouse creation: winterbaume's AssumeRole wants a
-     `RoleArn`, as AWS does, and the suite's MinIO-flavoured profiles send none (filed as
-     https://github.com/moriyoshi/winterbaume/issues/77, a MinIO-compatibility request).
+     The store now reads each document once, as Postgres returns a row once. The
+     vended-credential half does not pass yet, for reasons on winterbaume's side:
+     - AssumeRole wanted a `RoleArn`, as AWS does, and the suite's MinIO-flavoured profiles
+       send none (https://github.com/moriyoshi/winterbaume/issues/77). Fixed in
+       winterbaume-server 0.2.10 behind `--relax sts-assume-role-without-role-arn`, which the
+       plugin passes (2026-11-26).
+     - The session policy is not applied to S3 requests, so every test still fails at
+       warehouse creation: Lakekeeper checks that the vended credentials cannot write outside
+       the warehouse, and the write succeeds (412, `vended-credentials-scope-enforced`; filed
+       as https://github.com/moriyoshi/winterbaume/issues/85).
+     - With that check skipped (`LAKEKEEPER__SKIP_STORAGE_VALIDATION=true`, which skips every
+       storage check, so the plugin does not set it): 21 passed, 1 skipped, and
+       `test_write_read` and `test_write_read_multiple_tables` failed reading back their
+       manifest list. With vended credentials pyiceberg writes through pyarrow, which uploads
+       with `aws-chunked` encoding and a checksum trailer, and winterbaume stores the body with
+       its framing (https://github.com/moriyoshi/winterbaume/issues/84). Through s3fs, with
+       remote signing, the same tests pass.
 5. **Remaining methods.** Namespace move, roles and grants, statistics and the cache change
    log. Add the secret store on Google Secret Manager. Done (2026-11-24):
    - the task queue (see "Task queue");
